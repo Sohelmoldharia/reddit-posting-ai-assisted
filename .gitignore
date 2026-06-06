@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+posts_log.json
+images/
+venv/
+.venv/

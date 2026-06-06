@@ -1,0 +1,22 @@
+{
+  "subreddits": [
+    "technology",
+    "programming",
+    "science",
+    "worldnews",
+    "gadgets",
+    "futurology",
+    "environment",
+    "space",
+    "movies",
+    "music"
+  ],
+  "posts_per_day": 1,
+  "ai_provider": "openai",
+  "schedule": {
+    "start_hour": 8,
+    "end_hour": 22,
+    "min_delay_minutes": 30,
+    "max_delay_minutes": 120
+  }
+}

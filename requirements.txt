@@ -1,0 +1,5 @@
+praw
+python-dotenv
+openai
+anthropic
+google-generativeai
