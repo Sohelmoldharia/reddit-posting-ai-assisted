@@ -11,13 +11,12 @@
     "movies",
     "music"
   ],
-  "posts_per_day": 1,
+  "min_posts_per_day": 8,
+  "max_posts_per_day": 12,
   "ai_provider": "openai",
   "schedule": {
     "start_hour": 8,
     "end_hour": 22,
-    "min_delay_minutes": 30,
-    "max_delay_minutes": 120,
-    "daily_start_jitter_minutes": 90
+    "daily_start_jitter_minutes": 45
   }
 }

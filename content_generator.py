@@ -56,7 +56,11 @@ def _build_examples_block(subreddit, example_titles):
 
 def _build_prompt(topic, subreddit, style, length, example_titles):
     examples = _build_examples_block(subreddit, example_titles)
-    return f"""Write a Reddit post for r/{subreddit} about: {topic}
+    return f"""Write a Reddit post for r/{subreddit}.
+
+The keyword/topic is: {topic}
+
+IMPORTANT: The title MUST include the keyword "{topic}" (or a very close natural variation of it). Work it into the title naturally, don't force it awkwardly.
 
 {STYLE_INSTRUCTIONS[style]}
 {length}
@@ -69,9 +73,13 @@ Return ONLY valid JSON with exactly two fields:
 
 def _build_image_prompt(topic, subreddit, example_titles):
     examples = _build_examples_block(subreddit, example_titles)
-    return f"""Write a short Reddit title for an image post in r/{subreddit} about: {topic}
+    return f"""Write a short Reddit title for an image post in r/{subreddit}.
 
-It should read like a natural caption a real person would write, short and casual.{examples}
+The keyword/topic is: {topic}
+
+IMPORTANT: The title MUST include the keyword "{topic}" naturally.
+
+It should read like a natural caption, short and casual.{examples}
 
 Return ONLY valid JSON:
 {{"title": "..."}}"""

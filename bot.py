@@ -63,15 +63,13 @@ def get_today():
     return date.today().isoformat()
 
 
-def get_posted_today(log):
+def get_posts_today(log):
     today = get_today()
-    return log.get(today, {})
-
-
-def has_posted(log, subreddit, config):
-    posted = get_posted_today(log)
-    count = len(posted.get(subreddit, []))
-    return count >= config["posts_per_day"]
+    day_data = log.get(today, {})
+    count = 0
+    for posts in day_data.values():
+        count += len(posts)
+    return count
 
 
 def log_post(log, subreddit, topic, post_id, post_url, post_type):
@@ -90,22 +88,14 @@ def log_post(log, subreddit, topic, post_id, post_url, post_type):
     save_log(log)
 
 
-def get_pending_subreddits(config, log):
-    pending = []
-    for sub in config["subreddits"]:
-        if not has_posted(log, sub, config):
-            pending.append(sub)
-    return pending
-
-
 def pick_topic(topics, log):
     if not topics:
         print("No topics available. Add topics to topics.txt")
         return None
 
-    today_posts = get_posted_today(log)
+    today_data = log.get(get_today(), {})
     used_topics = set()
-    for posts in today_posts.values():
+    for posts in today_data.values():
         for p in posts:
             used_topics.add(p["topic"])
 
@@ -116,12 +106,21 @@ def pick_topic(topics, log):
     return random.choice(available)
 
 
+def pick_subreddit(config, log):
+    today_data = log.get(get_today(), {})
+    subs = config["subreddits"]
+    # weight toward subs that haven't been posted to yet today
+    unposted = [s for s in subs if s not in today_data]
+    if unposted:
+        return random.choice(unposted)
+    return random.choice(subs)
+
+
 def do_post(subreddit, topic_line, config):
     topic = parse_topic(topic_line)
     provider = config["ai_provider"]
     is_image = topic["image"] is not None
 
-    # pull recent titles so the post matches how this community actually writes
     try:
         example_titles = reddit_poster.get_recent_titles(subreddit)
     except Exception:
@@ -147,9 +146,8 @@ def do_post(subreddit, topic_line, config):
         return topic["text"], post_id, post_url, "text"
 
 
-# cache the randomized start time per day so it stays put within a day but
-# shifts day to day (posting at the exact same minute daily is a bot tell)
 _daily_start_cache = {}
+_daily_target_cache = {}
 
 
 def _start_minute_for(day_key, config):
@@ -158,6 +156,14 @@ def _start_minute_for(day_key, config):
         offset = random.randint(0, jitter) if jitter else 0
         _daily_start_cache[day_key] = config["schedule"]["start_hour"] * 60 + offset
     return _daily_start_cache[day_key]
+
+
+def _target_posts_for(day_key, config):
+    if day_key not in _daily_target_cache:
+        lo = config["min_posts_per_day"]
+        hi = config["max_posts_per_day"]
+        _daily_target_cache[day_key] = random.randint(lo, hi)
+    return _daily_target_cache[day_key]
 
 
 def is_within_schedule(config):
@@ -179,6 +185,21 @@ def next_start_datetime(config):
     return tomorrow.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=start_min)
 
 
+def _compute_delay(config, posts_done, target):
+    """Spread remaining posts across the remaining schedule window."""
+    now = datetime.now()
+    end_min = config["schedule"]["end_hour"] * 60
+    now_min = now.hour * 60 + now.minute
+    remaining_minutes = max(end_min - now_min, 30)
+    remaining_posts = max(target - posts_done, 1)
+
+    avg_gap = remaining_minutes / remaining_posts
+    # randomize around the average so gaps aren't uniform
+    lo = max(int(avg_gap * 0.5), 15)
+    hi = max(int(avg_gap * 1.5), lo + 10)
+    return random.randint(lo, hi)
+
+
 def run_bot():
     config = load_config()
     topics = load_topics()
@@ -188,7 +209,11 @@ def run_bot():
         print("No topics found. Add topics to topics.txt first.")
         sys.exit(1)
 
+    today = get_today()
+    target = _target_posts_for(today, config)
+
     print(f"Bot started — {len(config['subreddits'])} subreddits, {len(topics)} topics")
+    print(f"Today's target: {target} posts")
     print(f"Schedule: {config['schedule']['start_hour']}:00 - {config['schedule']['end_hour']}:00")
     print(f"AI provider: {config['ai_provider']}")
     print()
@@ -202,24 +227,25 @@ def run_bot():
         sys.exit(1)
 
     while True:
+        config = load_config()
+        today = get_today()
+        target = _target_posts_for(today, config)
+        log = load_log()
+        posts_done = get_posts_today(log)
+
         if not is_within_schedule(config):
             wake = next_start_datetime(config)
             wait_secs = max((wake - datetime.now()).total_seconds(), 60)
-            print(f"Outside schedule. Sleeping until {wake.strftime('%Y-%m-%d %H:%M')} "
+            print(f"\nOutside schedule. Sleeping until {wake.strftime('%Y-%m-%d %H:%M')} "
                   f"({int(wait_secs // 3600)}h {int((wait_secs % 3600) // 60)}m)")
             time.sleep(wait_secs)
-            log = load_log()
             continue
 
-        pending = get_pending_subreddits(config, log)
-
-        if not pending:
+        if posts_done >= target:
             wake = next_start_datetime(config)
             wait_secs = max((wake - datetime.now()).total_seconds(), 60)
-            print(f"All posts done for today. Sleeping until {wake.strftime('%Y-%m-%d %H:%M')} "
-                  f"({int(wait_secs // 3600)}h)")
+            print(f"\nAll {target} posts done for today. Sleeping until {wake.strftime('%Y-%m-%d %H:%M')}")
             time.sleep(wait_secs)
-            log = load_log()
             continue
 
         topics = load_topics()
@@ -228,21 +254,20 @@ def run_bot():
             time.sleep(60)
             continue
 
-        subreddit = random.choice(pending)
-        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Posting to r/{subreddit}...")
+        subreddit = pick_subreddit(config, log)
+        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Post {posts_done + 1}/{target} — r/{subreddit}...")
 
         try:
             topic_text, post_id, post_url, post_type = do_post(
                 subreddit, topic_line, config
             )
             log_post(log, subreddit, topic_text, post_id, post_url, post_type)
+            posts_done += 1
             print(f"  Done! {post_url}")
         except Exception as e:
             print(f"  Failed: {e}")
 
-        min_delay = config["schedule"]["min_delay_minutes"]
-        max_delay = config["schedule"]["max_delay_minutes"]
-        delay = random.randint(min_delay, max_delay)
+        delay = _compute_delay(config, posts_done, target)
         print(f"  Next post in ~{delay} minutes")
         time.sleep(delay * 60)
 
@@ -274,42 +299,42 @@ def post_now(subreddit):
 def show_status():
     config = load_config()
     log = load_log()
-    posted = get_posted_today(log)
+    today = get_today()
+    today_data = log.get(today, {})
+    target = _target_posts_for(today, config)
+    posts_done = get_posts_today(log)
 
-    print(f"=== Status for {get_today()} ===\n")
+    print(f"=== {today} — {posts_done}/{target} posts ===\n")
     for sub in config["subreddits"]:
-        posts = posted.get(sub, [])
+        posts = today_data.get(sub, [])
         if posts:
             for p in posts:
-                print(f"  r/{sub} — posted at {p['time']}: {p['topic']}")
-        else:
-            print(f"  r/{sub} — pending")
+                print(f"  r/{sub} [{p['time']}] {p['topic']}")
+    if not any(today_data.values()):
+        print("  No posts yet today.")
     print()
-
-    pending = get_pending_subreddits(config, log)
-    print(f"{len(config['subreddits']) - len(pending)}/{len(config['subreddits'])} subreddits done")
 
 
 def add_topic(topic):
     with open(TOPICS_PATH, "a") as f:
         f.write(f"\n{topic}")
-    print(f"Added topic: {topic}")
+    print(f"Added: {topic}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Reddit posting bot")
-    parser.add_argument("--run", action="store_true", help="Start the bot")
-    parser.add_argument("--post-now", metavar="SUBREDDIT", help="Post immediately to a subreddit")
+    parser.add_argument("--run", action="store_true", help="Start the bot (runs all day)")
+    parser.add_argument("--post-now", metavar="SUBREDDIT", help="Post to a subreddit right now")
     parser.add_argument("--status", action="store_true", help="Show today's posting status")
-    parser.add_argument("--add-topic", metavar="TOPIC", help="Add a topic to topics.txt")
-    parser.add_argument("--verify", action="store_true", help="Verify Reddit login")
+    parser.add_argument("--add-topic", metavar="TOPIC", help="Add a trending keyword")
+    parser.add_argument("--verify", action="store_true", help="Verify Reddit login works")
 
     args = parser.parse_args()
 
     if args.verify:
         try:
             user = reddit_poster.verify_login()
-            print(f"Login OK — logged in as u/{user}")
+            print(f"Login OK — u/{user}")
         except Exception as e:
             print(f"Login failed: {e}")
     elif args.add_topic:
