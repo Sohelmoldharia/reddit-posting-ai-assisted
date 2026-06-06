@@ -239,7 +239,7 @@ a{color:#58a6ff;text-decoration:none}
           <div class="form-row">
             <div class="form-group">
               <label>Subreddit (Optional)</label>
-              <input type="text" id="postNowSub" placeholder="Leave empty for random">
+              <input type="text" id="postNowSub" placeholder="name, r/name, URL, or leave empty">
             </div>
           </div>
           <button class="btn btn-blue" onclick="postNow()" id="postNowBtn">Post Now</button>
@@ -255,7 +255,7 @@ a{color:#58a6ff;text-decoration:none}
             </div>
             <div class="form-group">
               <label>Subreddit</label>
-              <input type="text" id="memeSub" placeholder="Subreddit to post in">
+              <input type="text" id="memeSub" placeholder="name, r/name, or full URL">
             </div>
           </div>
           <button class="btn btn-purple" onclick="searchMeme()" id="memeSearchBtn">Search Image</button>
@@ -311,7 +311,7 @@ a{color:#58a6ff;text-decoration:none}
       </div>
       <div class="card-body">
         <div style="display:flex;gap:8px;margin-bottom:12px">
-          <input type="text" id="newSub" placeholder="subreddit name" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addSub()">
+          <input type="text" id="newSub" placeholder="name, r/name, or full URL" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addSub()">
           <button class="btn btn-primary btn-sm" onclick="addSub()">Add</button>
         </div>
         <div id="subsList" style="display:flex;flex-wrap:wrap;gap:2px"></div>
@@ -350,7 +350,7 @@ a{color:#58a6ff;text-decoration:none}
           </div>
           <div class="form-group">
             <label>Subreddit</label>
-            <input type="text" id="schedSub" placeholder="subreddit name">
+            <input type="text" id="schedSub" placeholder="name, r/name, or full URL">
           </div>
           <div class="form-group">
             <label>Date & Time</label>
@@ -576,7 +576,7 @@ async function saveSchedule() {
 
 async function addSub() {
   const input = document.getElementById('newSub');
-  const name = input.value.trim().replace(/^r\//, '');
+  const name = input.value.trim();
   if (!name) return;
   const r = await api('/api/subreddits', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
   if (r.ok) { renderSubs(r.subreddits); input.value = ''; toast('Subreddit added'); }
@@ -603,7 +603,7 @@ async function removeTopic(idx) {
 async function postNow() {
   const btn = document.getElementById('postNowBtn');
   btn.disabled = true; btn.textContent = 'Posting...';
-  const sub = document.getElementById('postNowSub').value.trim().replace(/^r\//, '');
+  const sub = document.getElementById('postNowSub').value.trim();
   const r = await api('/api/post-now', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({subreddit: sub})});
   btn.disabled = false; btn.textContent = 'Post Now';
   if (r.ok) { toast(`Posted to r/${r.subreddit}!`); loadStatus(); }
@@ -627,7 +627,7 @@ function hideScheduleForm() { document.getElementById('scheduleForm').style.disp
 
 async function addScheduled() {
   const topic = document.getElementById('schedTopic').value.trim();
-  const sub = document.getElementById('schedSub').value.trim().replace(/^r\//, '');
+  const sub = document.getElementById('schedSub').value.trim();
   const time = document.getElementById('schedTime').value;
   if (!topic || !sub || !time) { toast('Fill in all fields', 'error'); return; }
   const r = await api('/api/scheduled', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic, subreddit:sub, scheduled_at:time})});
@@ -698,7 +698,7 @@ async function postComment() {
 async function searchMeme() {
   const btn = document.getElementById('memeSearchBtn');
   const query = document.getElementById('memeQuery').value.trim();
-  const sub = document.getElementById('memeSub').value.trim().replace(/^r\//, '');
+  const sub = document.getElementById('memeSub').value.trim();
   if (!query) { toast('Enter a search query', 'error'); return; }
   btn.disabled = true; btn.textContent = 'Searching...';
   const r = await api('/api/meme/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query})});
@@ -721,7 +721,7 @@ async function searchMeme() {
 
 async function postMeme() {
   const btn = document.getElementById('memePostBtn');
-  const sub = document.getElementById('memeSub').value.trim().replace(/^r\//, '');
+  const sub = document.getElementById('memeSub').value.trim();
   const title = document.getElementById('memeTitle').value.trim();
   const imagePath = document.getElementById('memeImagePath').value;
   if (!sub) { toast('Enter a subreddit', 'error'); return; }

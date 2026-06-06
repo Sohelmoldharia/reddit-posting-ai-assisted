@@ -109,6 +109,21 @@ def save_env_value(key, value):
     os.environ[key] = value
 
 
+def clean_subreddit(raw):
+    """Accept any format: r/name, /r/name, reddit.com/r/name, full URL, or just name."""
+    s = raw.strip().strip("/")
+    if "reddit.com" in s:
+        parts = s.split("/r/")
+        if len(parts) > 1:
+            s = parts[1].split("/")[0].split("?")[0]
+        else:
+            return ""
+    elif s.startswith("r/"):
+        s = s[2:]
+    s = s.split("/")[0].split("?")[0]
+    return s.strip().lower()
+
+
 # ─── scheduled posts ───
 
 def load_scheduled():
@@ -401,7 +416,7 @@ def api_save_credentials():
 @app.route("/api/subreddits", methods=["POST"])
 def api_add_subreddit():
     data = request.json
-    name = data.get("name", "").strip().lower()
+    name = clean_subreddit(data.get("name", ""))
     if not name:
         return jsonify({"error": "Empty name"}), 400
     config = load_config()
@@ -461,7 +476,7 @@ def api_stop_bot():
 @app.route("/api/post-now", methods=["POST"])
 def api_post_now():
     data = request.json
-    subreddit = data.get("subreddit", "").strip()
+    subreddit = clean_subreddit(data.get("subreddit", ""))
     config = load_config()
     if not subreddit:
         subreddit = pick_subreddit(config, load_log())
@@ -511,10 +526,10 @@ def api_get_scheduled():
 def api_add_scheduled():
     data = request.json
     topic = data.get("topic", "").strip()
-    subreddit = data.get("subreddit", "").strip().lower()
+    subreddit = clean_subreddit(data.get("subreddit", ""))
     scheduled_at = data.get("scheduled_at", "")
     if not topic or not subreddit or not scheduled_at:
-        return jsonify({"error": "topic, subreddit, and scheduled_at are required"}), 400
+        return jsonify({"error": "Topic, subreddit, and time are required"}), 400
     item = {
         "id": str(uuid.uuid4())[:8],
         "topic": topic,
@@ -604,7 +619,7 @@ def api_meme_search():
 @app.route("/api/meme/post", methods=["POST"])
 def api_meme_post():
     data = request.json
-    subreddit = data.get("subreddit", "").strip().lower()
+    subreddit = clean_subreddit(data.get("subreddit", ""))
     title = data.get("title", "").strip()
     image_path = data.get("image_path", "").strip()
     if not subreddit or not title or not image_path:
@@ -635,7 +650,7 @@ def api_meme_post():
 def api_meme_title():
     data = request.json
     query = data.get("query", "").strip()
-    subreddit = data.get("subreddit", "").strip()
+    subreddit = clean_subreddit(data.get("subreddit", ""))
     config = load_config()
     try:
         content = content_generator.generate_content(
