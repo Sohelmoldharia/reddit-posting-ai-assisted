@@ -223,28 +223,61 @@ a{color:#58a6ff;text-decoration:none}
       </div>
     </div>
 
-    <!-- Quick Post / Comment -->
+    <!-- Quick Actions -->
     <div class="card">
       <div class="card-header"><h2>Quick Actions</h2></div>
       <div class="card-body">
         <div class="tabs">
           <div class="tab active" onclick="switchTab(this,'tabPostNow')">Post Now</div>
+          <div class="tab" onclick="switchTab(this,'tabMeme')">Meme Post</div>
           <div class="tab" onclick="switchTab(this,'tabComment')">Comment</div>
         </div>
 
+        <!-- Post Now -->
         <div id="tabPostNow" class="tab-content active" style="padding-top:14px">
-          <p style="font-size:13px;color:#8b949e;margin-bottom:10px">Post immediately. Picks a random topic.</p>
+          <p style="font-size:13px;color:#8b949e;margin-bottom:10px">Post immediately. Picks a random topic from your list.</p>
           <div class="form-row">
             <div class="form-group">
-              <label>Subreddit (optional)</label>
+              <label>Subreddit (Optional)</label>
               <input type="text" id="postNowSub" placeholder="Leave empty for random">
             </div>
           </div>
           <button class="btn btn-blue" onclick="postNow()" id="postNowBtn">Post Now</button>
         </div>
 
+        <!-- Meme Post -->
+        <div id="tabMeme" class="tab-content" style="padding-top:14px">
+          <p style="font-size:13px;color:#8b949e;margin-bottom:10px">Search Google for memes/images, AI writes the title, post to your sub.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Search Query</label>
+              <input type="text" id="memeQuery" placeholder="e.g. Naruto memes, funny cat memes">
+            </div>
+            <div class="form-group">
+              <label>Subreddit</label>
+              <input type="text" id="memeSub" placeholder="Subreddit to post in">
+            </div>
+          </div>
+          <button class="btn btn-purple" onclick="searchMeme()" id="memeSearchBtn">Search Image</button>
+          <div id="memePreviewArea" style="display:none;margin-top:14px">
+            <div class="comment-preview">
+              <img id="memeImg" src="" style="max-width:100%;max-height:300px;border-radius:6px;margin-bottom:10px">
+              <div class="form-group" style="margin-top:8px">
+                <label>Title (AI-Generated, Edit If You Want)</label>
+                <input type="text" id="memeTitle" style="width:100%;background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none">
+              </div>
+              <input type="hidden" id="memeImagePath">
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" onclick="postMeme()" id="memePostBtn">Post Meme</button>
+              <button class="btn btn-purple" onclick="searchMeme()">Different Image</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comment -->
         <div id="tabComment" class="tab-content" style="padding-top:14px">
-          <p style="font-size:13px;color:#8b949e;margin-bottom:10px">Paste a Reddit post URL. AI generates a comment, you review & post.</p>
+          <p style="font-size:13px;color:#8b949e;margin-bottom:10px">Paste a Reddit post URL. AI generates a comment, you review and post.</p>
           <div class="form-row">
             <div class="form-group">
               <label>Reddit Post URL</label>
@@ -257,7 +290,7 @@ a{color:#58a6ff;text-decoration:none}
               <div class="cp-title" id="cpTitle"></div>
               <div class="cp-sub" id="cpSub"></div>
               <div style="margin-top:8px">
-                <label style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block">Generated Comment (edit if you want)</label>
+                <label style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block">Generated Comment (Edit If You Want)</label>
                 <textarea id="commentText" style="width:100%;background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:10px;border-radius:6px;font-size:14px;min-height:100px;font-family:inherit;outline:none"></textarea>
               </div>
             </div>
@@ -658,6 +691,49 @@ async function postComment() {
     toast('Comment posted!');
     document.getElementById('commentPreviewArea').style.display = 'none';
     document.getElementById('commentUrl').value = '';
+  } else toast(r.error || 'Failed', 'error');
+}
+
+// Meme post
+async function searchMeme() {
+  const btn = document.getElementById('memeSearchBtn');
+  const query = document.getElementById('memeQuery').value.trim();
+  const sub = document.getElementById('memeSub').value.trim().replace(/^r\//, '');
+  if (!query) { toast('Enter a search query', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Searching...';
+  const r = await api('/api/meme/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query})});
+  if (r.ok) {
+    document.getElementById('memeImagePath').value = r.image_path;
+    document.getElementById('memeImg').src = '/api/meme/preview-image?path=' + encodeURIComponent(r.image_path) + '&t=' + Date.now();
+    document.getElementById('memePreviewArea').style.display = 'block';
+    // generate title
+    if (sub) {
+      const t = await api('/api/meme/generate-title', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query, subreddit:sub})});
+      if (t.ok) document.getElementById('memeTitle').value = t.title;
+      else document.getElementById('memeTitle').value = query;
+    } else {
+      document.getElementById('memeTitle').value = query;
+    }
+    toast('Image found!');
+  } else toast(r.error || 'No images found', 'error');
+  btn.disabled = false; btn.textContent = 'Search Image';
+}
+
+async function postMeme() {
+  const btn = document.getElementById('memePostBtn');
+  const sub = document.getElementById('memeSub').value.trim().replace(/^r\//, '');
+  const title = document.getElementById('memeTitle').value.trim();
+  const imagePath = document.getElementById('memeImagePath').value;
+  if (!sub) { toast('Enter a subreddit', 'error'); return; }
+  if (!title) { toast('Enter a title', 'error'); return; }
+  if (!imagePath) { toast('Search for an image first', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Posting...';
+  const r = await api('/api/meme/post', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({subreddit:sub, title, image_path:imagePath})});
+  btn.disabled = false; btn.textContent = 'Post Meme';
+  if (r.ok) {
+    toast('Meme posted!');
+    document.getElementById('memePreviewArea').style.display = 'none';
+    loadStatus();
   } else toast(r.error || 'Failed', 'error');
 }
 

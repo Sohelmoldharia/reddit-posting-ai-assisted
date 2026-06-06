@@ -8,9 +8,10 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv, set_key
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 
 import content_generator
+import image_finder
 import reddit_poster
 
 load_dotenv()
@@ -575,5 +576,75 @@ def api_comment_post():
         return jsonify({"error": str(e)}), 500
 
 
+# ─── meme / image post routes ───
+
+@app.route("/api/meme/preview-image")
+def api_meme_preview_image():
+    path = request.args.get("path", "")
+    if not path or not os.path.exists(path):
+        return "Not found", 404
+    return send_file(path)
+
+
+@app.route("/api/meme/search", methods=["POST"])
+def api_meme_search():
+    data = request.json
+    query = data.get("query", "").strip()
+    if not query:
+        return jsonify({"error": "Search query is required"}), 400
+    try:
+        image_path = image_finder.search_and_download(query)
+        if not image_path:
+            return jsonify({"error": "No images found. Try a different search."}), 404
+        return jsonify({"ok": True, "image_path": image_path})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/meme/post", methods=["POST"])
+def api_meme_post():
+    data = request.json
+    subreddit = data.get("subreddit", "").strip().lower()
+    title = data.get("title", "").strip()
+    image_path = data.get("image_path", "").strip()
+    if not subreddit or not title or not image_path:
+        return jsonify({"error": "subreddit, title, and image_path are required"}), 400
+    if not os.path.exists(image_path):
+        return jsonify({"error": "Image file not found. Search again."}), 400
+    try:
+        post_id, post_url = reddit_poster.post_image(subreddit, title, image_path)
+        log = load_log()
+        today = get_today()
+        if today not in log:
+            log[today] = {}
+        if subreddit not in log[today]:
+            log[today][subreddit] = []
+        log[today][subreddit].append({
+            "topic": title, "post_id": post_id,
+            "url": post_url, "type": "meme",
+            "time": datetime.now().strftime("%H:%M:%S"),
+        })
+        save_log(log)
+        image_finder.cleanup_old_images()
+        return jsonify({"ok": True, "url": post_url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/meme/generate-title", methods=["POST"])
+def api_meme_title():
+    data = request.json
+    query = data.get("query", "").strip()
+    subreddit = data.get("subreddit", "").strip()
+    config = load_config()
+    try:
+        content = content_generator.generate_content(
+            query, subreddit, config["ai_provider"], is_image=True
+        )
+        return jsonify({"ok": True, "title": content["title"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=3500, debug=False)

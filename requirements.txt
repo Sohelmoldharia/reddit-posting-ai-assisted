@@ -4,3 +4,5 @@ openai
 anthropic
 google-generativeai
 flask
+duckduckgo_search
+requests

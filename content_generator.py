@@ -46,7 +46,11 @@ Just sound like a person who cares about the topic and is typing quickly."""
 
 def _build_examples_block(subreddit, example_titles):
     if not example_titles:
-        return ""
+        return (
+            f"\n\nThis subreddit (r/{subreddit}) is new or has few posts. "
+            "Write a title and post that would fit a growing community. "
+            "Keep it welcoming and conversational.\n"
+        )
     sample = "\n".join(f"- {t}" for t in example_titles[:8])
     return (
         f"\n\nHere are real recent titles from r/{subreddit}. Match this community's "
@@ -118,12 +122,43 @@ def _scrub(text):
     return text.strip()
 
 
+PROPER_CAPS = {
+    "ai": "AI", "vr": "VR", "ar": "AR", "gpu": "GPU", "cpu": "CPU",
+    "iphone": "iPhone", "ipad": "iPad", "ios": "iOS", "macos": "macOS",
+    "youtube": "YouTube", "chatgpt": "ChatGPT", "openai": "OpenAI",
+    "nasa": "NASA", "nfl": "NFL", "nba": "NBA", "ufc": "UFC", "mlb": "MLB",
+    "usa": "USA", "uk": "UK", "eu": "EU", "un": "UN",
+    "ps5": "PS5", "ps4": "PS4", "xbox": "Xbox", "pc": "PC",
+    "covid": "COVID", "adhd": "ADHD",
+    "usb": "USB", "hdmi": "HDMI", "wifi": "WiFi",
+    "api": "API", "html": "HTML", "css": "CSS",
+    "amd": "AMD", "intel": "Intel", "nvidia": "Nvidia",
+    "tesla": "Tesla", "spacex": "SpaceX", "google": "Google",
+    "amazon": "Amazon", "microsoft": "Microsoft", "apple": "Apple",
+    "netflix": "Netflix", "disney": "Disney", "marvel": "Marvel",
+    "dc": "DC", "hbo": "HBO", "spotify": "Spotify", "tiktok": "TikTok",
+    "naruto": "Naruto", "anime": "Anime", "manga": "Manga",
+    "samsung": "Samsung", "sony": "Sony", "nintendo": "Nintendo",
+    "reddit": "Reddit", "twitter": "Twitter",
+}
+
+
+def _fix_proper_caps(text):
+    words = text.split()
+    fixed = []
+    for w in words:
+        stripped = w.strip(".,!?;:'\"()-")
+        if stripped.lower() in PROPER_CAPS:
+            w = w.replace(stripped, PROPER_CAPS[stripped.lower()])
+        fixed.append(w)
+    return " ".join(fixed)
+
+
 def humanize_title(title):
     title = _scrub(title).strip().strip('"').strip()
-    # real people often don't capitalize titles at all
     if random.random() < 0.35:
         title = title.lower()
-    # and often skip the trailing period
+    title = _fix_proper_caps(title)
     if title.endswith(".") and random.random() < 0.75:
         title = title[:-1]
     return title
