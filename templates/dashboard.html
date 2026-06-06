@@ -24,11 +24,12 @@ a{color:#58a6ff;text-decoration:none}
 .card-body{padding:18px}
 
 .form-row{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
-.form-group{flex:1;min-width:180px}
+.form-group{flex:1;min-width:140px}
 .form-group label{display:block;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.form-group input,.form-group select{width:100%;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none;transition:border-color .2s}
-.form-group input:focus,.form-group select:focus{border-color:#58a6ff}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none;transition:border-color .2s;font-family:inherit}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#58a6ff}
 .form-group select{cursor:pointer}
+.form-group textarea{resize:vertical;min-height:80px}
 
 .saved-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#3fb950;font-weight:600;margin-left:8px}
 .saved-badge::before{content:'';width:6px;height:6px;background:#3fb950;border-radius:50%}
@@ -46,6 +47,8 @@ a{color:#58a6ff;text-decoration:none}
 .btn-outline:hover{background:#30363d}
 .btn-sm{padding:5px 10px;font-size:12px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-purple{background:#8957e5;color:#fff}
+.btn-purple:hover{background:#a371f7}
 
 .tag{display:inline-flex;align-items:center;gap:6px;background:#1c2128;border:1px solid #30363d;padding:5px 10px;border-radius:16px;font-size:13px;margin:3px}
 .tag-x{background:none;border:none;color:#8b949e;cursor:pointer;font-size:14px;padding:0;line-height:1}
@@ -62,7 +65,7 @@ a{color:#58a6ff;text-decoration:none}
 .status-dot.stopped{background:#484f58}
 .status-dot.error{background:#f85149;box-shadow:0 0 8px rgba(248,81,73,.4)}
 
-.post-log{max-height:350px;overflow-y:auto}
+.post-log{max-height:300px;overflow-y:auto}
 .post-entry{display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid #21262d;align-items:flex-start}
 .post-entry:last-child{border-bottom:none}
 .post-time{color:#484f58;font-size:12px;font-family:monospace;min-width:60px;padding-top:2px}
@@ -75,19 +78,34 @@ a{color:#58a6ff;text-decoration:none}
 .stat-num{font-size:24px;font-weight:700;color:#f0f6fc}
 .stat-label{font-size:11px;color:#8b949e;text-transform:uppercase;margin-top:2px}
 
-.toggle{position:relative;width:44px;height:24px;cursor:pointer}
-.toggle input{display:none}
-.toggle-slider{position:absolute;inset:0;background:#30363d;border-radius:12px;transition:.2s}
-.toggle-slider::before{content:'';position:absolute;width:18px;height:18px;background:#c9d1d9;border-radius:50%;top:3px;left:3px;transition:.2s}
-.toggle input:checked+.toggle-slider{background:#238636}
-.toggle input:checked+.toggle-slider::before{transform:translateX(20px)}
-
 .empty{text-align:center;padding:30px;color:#484f58;font-size:14px}
+
+.sched-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #21262d}
+.sched-item:last-child{border-bottom:none}
+.sched-time{font-size:12px;font-family:monospace;color:#e3b341;min-width:130px}
+.sched-sub{color:#58a6ff;font-size:13px;font-weight:600;min-width:100px}
+.sched-topic{color:#c9d1d9;font-size:13px;flex:1}
+.sched-status{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.sched-status.pending{background:#1c2128;color:#e3b341;border:1px solid #e3b341}
+.sched-status.done{background:#1c2128;color:#3fb950;border:1px solid #3fb950}
+.sched-status.failed{background:#1c2128;color:#f85149;border:1px solid #f85149}
+
+.comment-preview{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;margin:12px 0}
+.comment-preview .cp-title{font-size:15px;font-weight:600;color:#f0f6fc;margin-bottom:4px}
+.comment-preview .cp-sub{font-size:12px;color:#8b949e;margin-bottom:10px}
+.comment-preview .cp-body{font-size:13px;color:#c9d1d9;line-height:1.5}
 
 .toast{position:fixed;bottom:24px;right:24px;background:#1c2128;border:1px solid #30363d;color:#c9d1d9;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.success{border-color:#238636}
 .toast.error{border-color:#da3633}
+
+.tabs{display:flex;border-bottom:1px solid #30363d;margin-bottom:0}
+.tab{padding:10px 18px;font-size:13px;font-weight:600;color:#8b949e;cursor:pointer;border-bottom:2px solid transparent;transition:.2s}
+.tab:hover{color:#c9d1d9}
+.tab.active{color:#f0f6fc;border-bottom-color:#58a6ff}
+.tab-content{display:none}
+.tab-content.active{display:block}
 
 @media(max-width:768px){.grid{grid-template-columns:1fr}.form-row{flex-direction:column}}
 </style>
@@ -96,8 +114,8 @@ a{color:#58a6ff;text-decoration:none}
 
 <div class="header">
   <div>
-    <h1><span>⬡</span> Reddit Bot <span style="font-weight:400;font-size:14px;color:#8b949e">Dashboard</span></h1>
-    <div class="header-sub">Schedule, post & monitor — all from here</div>
+    <h1><span>&#x2B21;</span> Reddit Bot <span style="font-weight:400;font-size:14px;color:#8b949e">Dashboard</span></h1>
+    <div class="header-sub">Schedule, post & monitor</div>
   </div>
   <div class="bot-control">
     <div style="display:flex;align-items:center;gap:8px">
@@ -110,10 +128,10 @@ a{color:#58a6ff;text-decoration:none}
 
 <div class="container">
 
-  <!-- Stats Bar -->
-  <div class="stats-bar" id="statsBar">
+  <div class="stats-bar">
     <div class="stat"><div class="stat-num" id="statDone">0</div><div class="stat-label">Posted</div></div>
     <div class="stat"><div class="stat-num" id="statTarget">0</div><div class="stat-label">Target</div></div>
+    <div class="stat"><div class="stat-num" id="statSched">0</div><div class="stat-label">Scheduled</div></div>
     <div class="stat"><div class="stat-num" id="statSubs">0</div><div class="stat-label">Subreddits</div></div>
     <div class="stat"><div class="stat-num" id="statTopics">0</div><div class="stat-label">Topics</div></div>
   </div>
@@ -169,15 +187,13 @@ a{color:#58a6ff;text-decoration:none}
             <input type="password" id="aiApiKey" placeholder="Your API key">
           </div>
         </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn btn-primary" onclick="saveAiSettings()">Save</button>
-        </div>
+        <button class="btn btn-primary" onclick="saveAiSettings()">Save</button>
       </div>
     </div>
 
     <!-- Schedule -->
     <div class="card">
-      <div class="card-header"><h2>Schedule</h2></div>
+      <div class="card-header"><h2>Schedule Settings</h2></div>
       <div class="card-body">
         <div class="form-row">
           <div class="form-group">
@@ -207,18 +223,50 @@ a{color:#58a6ff;text-decoration:none}
       </div>
     </div>
 
-    <!-- Post Now -->
+    <!-- Quick Post / Comment -->
     <div class="card">
-      <div class="card-header"><h2>Quick Post</h2></div>
+      <div class="card-header"><h2>Quick Actions</h2></div>
       <div class="card-body">
-        <p style="font-size:13px;color:#8b949e;margin-bottom:12px">Post immediately to a subreddit. Picks a random topic from your list.</p>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Subreddit (optional)</label>
-            <input type="text" id="postNowSub" placeholder="Leave empty for random">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab(this,'tabPostNow')">Post Now</div>
+          <div class="tab" onclick="switchTab(this,'tabComment')">Comment</div>
+        </div>
+
+        <div id="tabPostNow" class="tab-content active" style="padding-top:14px">
+          <p style="font-size:13px;color:#8b949e;margin-bottom:10px">Post immediately. Picks a random topic.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Subreddit (optional)</label>
+              <input type="text" id="postNowSub" placeholder="Leave empty for random">
+            </div>
+          </div>
+          <button class="btn btn-blue" onclick="postNow()" id="postNowBtn">Post Now</button>
+        </div>
+
+        <div id="tabComment" class="tab-content" style="padding-top:14px">
+          <p style="font-size:13px;color:#8b949e;margin-bottom:10px">Paste a Reddit post URL. AI generates a comment, you review & post.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Reddit Post URL</label>
+              <input type="text" id="commentUrl" placeholder="https://reddit.com/r/sub/comments/...">
+            </div>
+          </div>
+          <button class="btn btn-purple" onclick="previewComment()" id="previewBtn">Generate Comment</button>
+          <div id="commentPreviewArea" style="display:none">
+            <div class="comment-preview">
+              <div class="cp-title" id="cpTitle"></div>
+              <div class="cp-sub" id="cpSub"></div>
+              <div style="margin-top:8px">
+                <label style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block">Generated Comment (edit if you want)</label>
+                <textarea id="commentText" style="width:100%;background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:10px;border-radius:6px;font-size:14px;min-height:100px;font-family:inherit;outline:none"></textarea>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" onclick="postComment()">Post Comment</button>
+              <button class="btn btn-purple" onclick="previewComment()">Regenerate</button>
+            </div>
           </div>
         </div>
-        <button class="btn btn-blue" onclick="postNow()" id="postNowBtn">Post Now</button>
       </div>
     </div>
 
@@ -230,7 +278,7 @@ a{color:#58a6ff;text-decoration:none}
       </div>
       <div class="card-body">
         <div style="display:flex;gap:8px;margin-bottom:12px">
-          <input type="text" id="newSub" placeholder="Add subreddit name" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addSub()">
+          <input type="text" id="newSub" placeholder="subreddit name" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addSub()">
           <button class="btn btn-primary btn-sm" onclick="addSub()">Add</button>
         </div>
         <div id="subsList" style="display:flex;flex-wrap:wrap;gap:2px"></div>
@@ -245,10 +293,46 @@ a{color:#58a6ff;text-decoration:none}
       </div>
       <div class="card-body">
         <div style="display:flex;gap:8px;margin-bottom:12px">
-          <input type="text" id="newTopic" placeholder="Add keyword from Google Trends" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addTopic()">
+          <input type="text" id="newTopic" placeholder="Keyword from Google Trends" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addTopic()">
           <button class="btn btn-primary btn-sm" onclick="addTopic()">Add</button>
         </div>
-        <div id="topicsList" style="max-height:250px;overflow-y:auto"></div>
+        <div id="topicsList" style="max-height:220px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- Scheduled Posts -->
+    <div class="card grid-full">
+      <div class="card-header">
+        <h2>Scheduled Posts</h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-outline" onclick="clearDoneScheduled()">Clear Done</button>
+          <button class="btn btn-sm btn-blue" onclick="showScheduleForm()">+ Schedule Post</button>
+        </div>
+      </div>
+      <div id="scheduleForm" style="display:none;padding:18px;border-bottom:1px solid #30363d;background:#1c2128">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Topic / Keyword</label>
+            <input type="text" id="schedTopic" placeholder="Trending keyword">
+          </div>
+          <div class="form-group">
+            <label>Subreddit</label>
+            <input type="text" id="schedSub" placeholder="subreddit name">
+          </div>
+          <div class="form-group">
+            <label>Date & Time</label>
+            <input type="datetime-local" id="schedTime">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="addScheduled()">Schedule</button>
+          <button class="btn btn-outline" onclick="hideScheduleForm()">Cancel</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="scheduledList" style="max-height:250px;overflow-y:auto">
+          <div class="empty">No scheduled posts</div>
+        </div>
       </div>
     </div>
 
@@ -270,12 +354,20 @@ a{color:#58a6ff;text-decoration:none}
 
 <script>
 let botRunning = false;
+let _commentUrl = '';
 
 function toast(msg, type='success') {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show ' + type;
   setTimeout(() => t.className = 'toast', 3000);
+}
+
+function switchTab(el, tabId) {
+  el.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  el.closest('.card-body').querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
 }
 
 async function api(url, opts) {
@@ -295,17 +387,13 @@ async function loadConfig() {
   document.getElementById('minPosts').value = c.min_posts_per_day;
   document.getElementById('maxPosts').value = c.max_posts_per_day;
 
-  // env badges
   toggle('envRedditId', e.REDDIT_CLIENT_ID);
   toggle('envRedditSecret', e.REDDIT_CLIENT_SECRET);
   toggle('envRedditUser', e.REDDIT_USERNAME);
   toggle('envRedditPass', e.REDDIT_PASSWORD);
   updateAiKeyBadge(e);
 
-  // subreddits
   renderSubs(c.subreddits);
-
-  // topics
   renderTopics(d.topics);
 
   document.getElementById('statSubs').textContent = c.subreddits.length;
@@ -342,7 +430,7 @@ function renderTopics(topics) {
   const el = document.getElementById('topicsList');
   document.getElementById('topicCount').textContent = topics.length;
   document.getElementById('statTopics').textContent = topics.length;
-  if (!topics.length) { el.innerHTML = '<div class="empty">No topics yet. Add trending keywords above.</div>'; return; }
+  if (!topics.length) { el.innerHTML = '<div class="empty">No topics. Add trending keywords above.</div>'; return; }
   el.innerHTML = topics.map((t, i) =>
     `<div class="topic-item"><span class="topic-idx">${i+1}</span><span class="topic-text">${esc(t)}</span><button class="tag-x" onclick="removeTopic(${i})">&times;</button></div>`
   ).join('');
@@ -381,6 +469,29 @@ async function loadStatus() {
   }
 }
 
+async function loadScheduled() {
+  const d = await api('/api/scheduled');
+  const items = d.scheduled || [];
+  const pending = items.filter(i => i.status === 'pending');
+  document.getElementById('statSched').textContent = pending.length;
+  const el = document.getElementById('scheduledList');
+  if (!items.length) { el.innerHTML = '<div class="empty">No scheduled posts</div>'; return; }
+  el.innerHTML = items.map(i => {
+    const dt = new Date(i.scheduled_at);
+    const timeStr = dt.toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    let actions = '';
+    if (i.status === 'pending') actions = `<button class="tag-x" onclick="cancelScheduled('${i.id}')" title="Cancel">&times;</button>`;
+    if (i.status === 'done' && i.post_url) actions = `<a class="post-link" href="${i.post_url}" target="_blank">view</a>`;
+    return `<div class="sched-item">
+      <span class="sched-time">${timeStr}</span>
+      <span class="sched-sub">r/${i.subreddit}</span>
+      <span class="sched-topic">${esc(i.topic)}</span>
+      <span class="sched-status ${i.status}">${i.status}</span>
+      ${actions}
+    </div>`;
+  }).join('');
+}
+
 async function toggleBot() {
   if (botRunning) {
     await api('/api/bot/stop', {method:'POST'});
@@ -407,7 +518,6 @@ async function saveAiSettings() {
   const provider = document.getElementById('aiProvider').value;
   const key = document.getElementById('aiApiKey').value;
   const map = {openai:'OPENAI_API_KEY', anthropic:'ANTHROPIC_API_KEY', google:'GOOGLE_API_KEY'};
-
   await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ai_provider: provider})});
   if (key) {
     await api('/api/credentials', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({[map[provider]]: key})});
@@ -441,7 +551,7 @@ async function addSub() {
 
 async function removeSub(name) {
   const r = await api('/api/subreddits/' + name, {method:'DELETE'});
-  if (r.ok) { renderSubs(r.subreddits); toast('Subreddit removed'); }
+  if (r.ok) { renderSubs(r.subreddits); toast('Removed'); }
 }
 
 async function addTopic() {
@@ -454,7 +564,7 @@ async function addTopic() {
 
 async function removeTopic(idx) {
   const r = await api('/api/topics/' + idx, {method:'DELETE'});
-  if (r.ok) { renderTopics(r.topics); toast('Topic removed'); }
+  if (r.ok) { renderTopics(r.topics); toast('Removed'); }
 }
 
 async function postNow() {
@@ -464,7 +574,7 @@ async function postNow() {
   const r = await api('/api/post-now', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({subreddit: sub})});
   btn.disabled = false; btn.textContent = 'Post Now';
   if (r.ok) { toast(`Posted to r/${r.subreddit}!`); loadStatus(); }
-  else toast(r.error || 'Failed to post', 'error');
+  else toast(r.error || 'Failed', 'error');
 }
 
 async function verifyLogin() {
@@ -473,10 +583,90 @@ async function verifyLogin() {
   else toast(r.error || 'Login failed', 'error');
 }
 
+// Scheduled posts
+function showScheduleForm() {
+  document.getElementById('scheduleForm').style.display = 'block';
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + 30);
+  document.getElementById('schedTime').value = now.toISOString().slice(0,16);
+}
+function hideScheduleForm() { document.getElementById('scheduleForm').style.display = 'none'; }
+
+async function addScheduled() {
+  const topic = document.getElementById('schedTopic').value.trim();
+  const sub = document.getElementById('schedSub').value.trim().replace(/^r\//, '');
+  const time = document.getElementById('schedTime').value;
+  if (!topic || !sub || !time) { toast('Fill in all fields', 'error'); return; }
+  const r = await api('/api/scheduled', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic, subreddit:sub, scheduled_at:time})});
+  if (r.ok) { renderScheduled(r.scheduled); hideScheduleForm(); toast('Post scheduled!'); document.getElementById('schedTopic').value=''; document.getElementById('schedSub').value=''; }
+  else toast(r.error || 'Failed', 'error');
+}
+
+function renderScheduled(items) {
+  const pending = items.filter(i => i.status === 'pending');
+  document.getElementById('statSched').textContent = pending.length;
+  const el = document.getElementById('scheduledList');
+  if (!items.length) { el.innerHTML = '<div class="empty">No scheduled posts</div>'; return; }
+  el.innerHTML = items.map(i => {
+    const dt = new Date(i.scheduled_at);
+    const timeStr = dt.toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    let actions = '';
+    if (i.status === 'pending') actions = `<button class="tag-x" onclick="cancelScheduled('${i.id}')" title="Cancel">&times;</button>`;
+    if (i.status === 'done' && i.post_url) actions = `<a class="post-link" href="${i.post_url}" target="_blank">view</a>`;
+    return `<div class="sched-item">
+      <span class="sched-time">${timeStr}</span>
+      <span class="sched-sub">r/${i.subreddit}</span>
+      <span class="sched-topic">${esc(i.topic)}</span>
+      <span class="sched-status ${i.status}">${i.status}</span>
+      ${actions}
+    </div>`;
+  }).join('');
+}
+
+async function cancelScheduled(id) {
+  const r = await api('/api/scheduled/' + id, {method:'DELETE'});
+  if (r.ok) { renderScheduled(r.scheduled); toast('Cancelled'); }
+}
+
+async function clearDoneScheduled() {
+  const r = await api('/api/scheduled/clear-done', {method:'POST'});
+  if (r.ok) { renderScheduled(r.scheduled); toast('Cleared'); }
+}
+
+// Commenting
+async function previewComment() {
+  const btn = document.getElementById('previewBtn');
+  const url = document.getElementById('commentUrl').value.trim();
+  if (!url) { toast('Paste a Reddit URL first', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Generating...';
+  const r = await api('/api/comment/preview', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url})});
+  btn.disabled = false; btn.textContent = 'Generate Comment';
+  if (r.ok) {
+    _commentUrl = url;
+    document.getElementById('cpTitle').textContent = r.post_info.title;
+    document.getElementById('cpSub').textContent = `r/${r.post_info.subreddit} • ${r.post_info.score} pts • ${r.post_info.num_comments} comments`;
+    document.getElementById('commentText').value = r.comment;
+    document.getElementById('commentPreviewArea').style.display = 'block';
+  } else toast(r.error || 'Failed to fetch post', 'error');
+}
+
+async function postComment() {
+  const comment = document.getElementById('commentText').value.trim();
+  if (!comment || !_commentUrl) { toast('No comment to post', 'error'); return; }
+  const r = await api('/api/comment/post', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:_commentUrl, comment})});
+  if (r.ok) {
+    toast('Comment posted!');
+    document.getElementById('commentPreviewArea').style.display = 'none';
+    document.getElementById('commentUrl').value = '';
+  } else toast(r.error || 'Failed', 'error');
+}
+
 // init
 loadConfig();
 loadStatus();
+loadScheduled();
 setInterval(loadStatus, 5000);
+setInterval(loadScheduled, 15000);
 </script>
 </body>
 </html>

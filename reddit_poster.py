@@ -40,6 +40,31 @@ def get_recent_titles(subreddit_name, limit=10):
     return titles
 
 
+def get_post_info(url):
+    """Fetch a post's title, body, subreddit, and top comments for context."""
+    reddit = _get_reddit()
+    submission = reddit.submission(url=url)
+    submission.comments.replace_more(limit=0)
+    top_comments = []
+    for c in submission.comments[:8]:
+        top_comments.append({"author": str(c.author), "body": c.body[:300], "score": c.score})
+    return {
+        "title": submission.title,
+        "body": submission.selftext[:1000] if submission.selftext else "",
+        "subreddit": str(submission.subreddit),
+        "score": submission.score,
+        "num_comments": submission.num_comments,
+        "top_comments": top_comments,
+    }
+
+
+def post_comment(url, comment_body):
+    reddit = _get_reddit()
+    submission = reddit.submission(url=url)
+    comment = submission.reply(comment_body)
+    return comment.id, f"https://reddit.com{comment.permalink}"
+
+
 def verify_login():
     reddit = _get_reddit()
     user = reddit.user.me()

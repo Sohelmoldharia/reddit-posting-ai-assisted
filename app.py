@@ -3,6 +3,7 @@ import os
 import random
 import threading
 import time
+import uuid
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
@@ -19,6 +20,7 @@ app = Flask(__name__)
 CONFIG_PATH = Path("config.json")
 TOPICS_PATH = Path("topics.txt")
 LOG_PATH = Path("posts_log.json")
+SCHEDULE_PATH = Path("scheduled_posts.json")
 ENV_PATH = Path(".env")
 
 _bot_thread = None
@@ -104,6 +106,60 @@ def save_env_value(key, value):
         ENV_PATH.touch()
     set_key(str(ENV_PATH), key, value)
     os.environ[key] = value
+
+
+# ─── scheduled posts ───
+
+def load_scheduled():
+    if not SCHEDULE_PATH.exists():
+        return []
+    with open(SCHEDULE_PATH) as f:
+        return json.load(f)
+
+
+def save_scheduled(items):
+    with open(SCHEDULE_PATH, "w") as f:
+        json.dump(items, f, indent=2)
+
+
+def check_scheduled_posts(config, log):
+    """Run any scheduled posts whose time has come. Returns number posted."""
+    items = load_scheduled()
+    now = datetime.now()
+    posted = 0
+    remaining = []
+
+    for item in items:
+        if item.get("status") == "done":
+            remaining.append(item)
+            continue
+        sched_time = datetime.fromisoformat(item["scheduled_at"])
+        if now >= sched_time:
+            try:
+                topic_text, post_id, post_url, post_type = do_post(
+                    item["subreddit"], item["topic"], config
+                )
+                today = get_today()
+                if today not in log:
+                    log[today] = {}
+                if item["subreddit"] not in log[today]:
+                    log[today][item["subreddit"]] = []
+                log[today][item["subreddit"]].append({
+                    "topic": topic_text, "post_id": post_id,
+                    "url": post_url, "type": post_type,
+                    "time": now.strftime("%H:%M:%S"),
+                })
+                save_log(log)
+                item["status"] = "done"
+                item["post_url"] = post_url
+                posted += 1
+            except Exception as e:
+                item["status"] = "failed"
+                item["error"] = str(e)
+        remaining.append(item)
+
+    save_scheduled(remaining)
+    return posted
 
 
 # ─── bot thread logic ───
@@ -195,6 +251,16 @@ def bot_loop():
         target = _target_posts_for(today, config)
         log = load_log()
         posts_done = get_posts_today(log)
+
+        # check scheduled posts regardless of schedule window
+        try:
+            scheduled_count = check_scheduled_posts(config, log)
+            if scheduled_count:
+                posts_done += scheduled_count
+                _bot_status["message"] = f"Posted {scheduled_count} scheduled post(s)"
+                log = load_log()
+        except Exception:
+            pass
 
         if not is_within_schedule(config):
             _bot_status["message"] = f"Outside schedule. Waiting... ({posts_done}/{target} today)"
@@ -430,6 +496,83 @@ def api_verify_login():
         return jsonify({"ok": True, "username": user})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+# ─── scheduled posts routes ───
+
+@app.route("/api/scheduled")
+def api_get_scheduled():
+    items = load_scheduled()
+    return jsonify({"scheduled": items})
+
+
+@app.route("/api/scheduled", methods=["POST"])
+def api_add_scheduled():
+    data = request.json
+    topic = data.get("topic", "").strip()
+    subreddit = data.get("subreddit", "").strip().lower()
+    scheduled_at = data.get("scheduled_at", "")
+    if not topic or not subreddit or not scheduled_at:
+        return jsonify({"error": "topic, subreddit, and scheduled_at are required"}), 400
+    item = {
+        "id": str(uuid.uuid4())[:8],
+        "topic": topic,
+        "subreddit": subreddit,
+        "scheduled_at": scheduled_at,
+        "created_at": datetime.now().isoformat(),
+        "status": "pending",
+    }
+    items = load_scheduled()
+    items.append(item)
+    save_scheduled(items)
+    return jsonify({"ok": True, "scheduled": items})
+
+
+@app.route("/api/scheduled/<item_id>", methods=["DELETE"])
+def api_cancel_scheduled(item_id):
+    items = load_scheduled()
+    items = [i for i in items if i["id"] != item_id]
+    save_scheduled(items)
+    return jsonify({"ok": True, "scheduled": items})
+
+
+@app.route("/api/scheduled/clear-done", methods=["POST"])
+def api_clear_done_scheduled():
+    items = load_scheduled()
+    items = [i for i in items if i.get("status") == "pending"]
+    save_scheduled(items)
+    return jsonify({"ok": True, "scheduled": items})
+
+
+# ─── commenting routes ───
+
+@app.route("/api/comment/preview", methods=["POST"])
+def api_comment_preview():
+    data = request.json
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "URL is required"}), 400
+    try:
+        post_info = reddit_poster.get_post_info(url)
+        config = load_config()
+        comment_text = content_generator.generate_comment(post_info, config["ai_provider"])
+        return jsonify({"ok": True, "post_info": post_info, "comment": comment_text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/comment/post", methods=["POST"])
+def api_comment_post():
+    data = request.json
+    url = data.get("url", "").strip()
+    comment_body = data.get("comment", "").strip()
+    if not url or not comment_body:
+        return jsonify({"error": "URL and comment are required"}), 400
+    try:
+        comment_id, comment_url = reddit_poster.post_comment(url, comment_body)
+        return jsonify({"ok": True, "comment_id": comment_id, "comment_url": comment_url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

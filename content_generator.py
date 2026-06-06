@@ -203,3 +203,93 @@ def _generate_google(prompt, temperature):
         generation_config={"temperature": temperature},
     )
     return _parse_response(response.text)
+
+
+# ─── comment generation ───
+
+COMMENT_SYSTEM = """You are a regular Reddit user leaving a comment on a post. You are NOT an AI. You're just a person reacting to what you read.
+
+How real people comment on Reddit:
+- Short and casual, usually 1-3 sentences
+- React to something specific in the post, don't just summarize it
+- Contractions always. Lowercase fine. Sentence fragments fine.
+- Have an opinion. Agree, disagree, add something, ask a follow-up.
+- Sometimes just one line is perfect.
+
+NEVER do these:
+- Start with "Great post!" or "Thanks for sharing!"
+- Use the words: delve, crucial, landscape, insightful, comprehensive
+- Use em dashes (—)
+- Write a structured response with points or lists
+- End with a generic question like "What do you think?"
+- Sound like you're writing an essay
+- Use emojis
+
+Just sound like a real person who read the post and had a reaction."""
+
+
+def _build_comment_prompt(post_info):
+    comments_ctx = ""
+    if post_info.get("top_comments"):
+        samples = post_info["top_comments"][:4]
+        comments_ctx = "\n\nExisting comments (for context, don't repeat them):\n"
+        for c in samples:
+            comments_ctx += f"- u/{c['author']}: {c['body'][:150]}\n"
+
+    body_ctx = ""
+    if post_info.get("body"):
+        body_ctx = f"\n\nPost body:\n{post_info['body'][:500]}"
+
+    return f"""Write a comment on this Reddit post in r/{post_info['subreddit']}:
+
+Title: {post_info['title']}{body_ctx}{comments_ctx}
+
+Write a natural, casual comment. Just the comment text, nothing else. No JSON, no quotes, just the comment."""
+
+
+def generate_comment(post_info, provider="openai"):
+    prompt = _build_comment_prompt(post_info)
+    temperature = round(random.uniform(0.85, 1.0), 2)
+
+    if provider == "openai":
+        raw = _generate_raw_openai(prompt, COMMENT_SYSTEM, temperature)
+    elif provider == "anthropic":
+        raw = _generate_raw_anthropic(prompt, COMMENT_SYSTEM, temperature)
+    elif provider == "google":
+        raw = _generate_raw_google(prompt, COMMENT_SYSTEM, temperature)
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+
+    return _scrub(raw.strip().strip('"'))
+
+
+def _generate_raw_openai(prompt, system, temperature):
+    from openai import OpenAI
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+        temperature=temperature,
+    )
+    return response.choices[0].message.content
+
+
+def _generate_raw_anthropic(prompt, system, temperature):
+    import anthropic
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=512,
+        temperature=temperature,
+        system=system,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text
+
+
+def _generate_raw_google(prompt, system, temperature):
+    import google.generativeai as genai
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=system)
+    response = model.generate_content(prompt, generation_config={"temperature": temperature})
+    return response.text
