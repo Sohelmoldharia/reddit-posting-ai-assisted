@@ -3,3 +3,4 @@ python-dotenv
 openai
 anthropic
 google-generativeai
+flask

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reddit Bot</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
+a{color:#58a6ff;text-decoration:none}
+
+.header{background:#161b22;border-bottom:1px solid #30363d;padding:16px 24px;display:flex;align-items:center;justify-content:space-between}
+.header h1{font-size:20px;font-weight:600;color:#f0f6fc;display:flex;align-items:center;gap:10px}
+.header h1 span{color:#58a6ff}
+.header-sub{font-size:13px;color:#8b949e}
+
+.container{max-width:1200px;margin:0 auto;padding:24px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid-full{grid-column:1/-1}
+
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
+.card-header{padding:14px 18px;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between}
+.card-header h2{font-size:14px;font-weight:600;color:#f0f6fc;text-transform:uppercase;letter-spacing:.5px}
+.card-body{padding:18px}
+
+.form-row{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.form-group{flex:1;min-width:180px}
+.form-group label{display:block;font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.form-group input,.form-group select{width:100%;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none;transition:border-color .2s}
+.form-group input:focus,.form-group select:focus{border-color:#58a6ff}
+.form-group select{cursor:pointer}
+
+.saved-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#3fb950;font-weight:600;margin-left:8px}
+.saved-badge::before{content:'';width:6px;height:6px;background:#3fb950;border-radius:50%}
+.not-saved{color:#f85149}
+.not-saved::before{background:#f85149}
+
+.btn{padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-primary{background:#238636;color:#fff}
+.btn-primary:hover{background:#2ea043}
+.btn-blue{background:#1f6feb;color:#fff}
+.btn-blue:hover{background:#388bfd}
+.btn-danger{background:#da3633;color:#fff}
+.btn-danger:hover{background:#f85149}
+.btn-outline{background:transparent;color:#c9d1d9;border:1px solid #30363d}
+.btn-outline:hover{background:#30363d}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.tag{display:inline-flex;align-items:center;gap:6px;background:#1c2128;border:1px solid #30363d;padding:5px 10px;border-radius:16px;font-size:13px;margin:3px}
+.tag-x{background:none;border:none;color:#8b949e;cursor:pointer;font-size:14px;padding:0;line-height:1}
+.tag-x:hover{color:#f85149}
+
+.topic-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #21262d}
+.topic-item:last-child{border-bottom:none}
+.topic-text{font-size:14px;flex:1}
+.topic-idx{color:#484f58;font-size:12px;margin-right:10px;min-width:20px}
+
+.bot-control{display:flex;align-items:center;gap:16px}
+.status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.status-dot.running{background:#3fb950;box-shadow:0 0 8px rgba(63,185,80,.4)}
+.status-dot.stopped{background:#484f58}
+.status-dot.error{background:#f85149;box-shadow:0 0 8px rgba(248,81,73,.4)}
+
+.post-log{max-height:350px;overflow-y:auto}
+.post-entry{display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid #21262d;align-items:flex-start}
+.post-entry:last-child{border-bottom:none}
+.post-time{color:#484f58;font-size:12px;font-family:monospace;min-width:60px;padding-top:2px}
+.post-sub{color:#58a6ff;font-size:13px;font-weight:600;min-width:120px}
+.post-topic{color:#c9d1d9;font-size:13px;flex:1}
+.post-link{font-size:12px}
+
+.stats-bar{display:flex;gap:20px;padding:14px 18px;background:#1c2128;border-radius:8px;margin-bottom:16px}
+.stat{text-align:center}
+.stat-num{font-size:24px;font-weight:700;color:#f0f6fc}
+.stat-label{font-size:11px;color:#8b949e;text-transform:uppercase;margin-top:2px}
+
+.toggle{position:relative;width:44px;height:24px;cursor:pointer}
+.toggle input{display:none}
+.toggle-slider{position:absolute;inset:0;background:#30363d;border-radius:12px;transition:.2s}
+.toggle-slider::before{content:'';position:absolute;width:18px;height:18px;background:#c9d1d9;border-radius:50%;top:3px;left:3px;transition:.2s}
+.toggle input:checked+.toggle-slider{background:#238636}
+.toggle input:checked+.toggle-slider::before{transform:translateX(20px)}
+
+.empty{text-align:center;padding:30px;color:#484f58;font-size:14px}
+
+.toast{position:fixed;bottom:24px;right:24px;background:#1c2128;border:1px solid #30363d;color:#c9d1d9;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{border-color:#238636}
+.toast.error{border-color:#da3633}
+
+@media(max-width:768px){.grid{grid-template-columns:1fr}.form-row{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1><span>⬡</span> Reddit Bot <span style="font-weight:400;font-size:14px;color:#8b949e">Dashboard</span></h1>
+    <div class="header-sub">Schedule, post & monitor — all from here</div>
+  </div>
+  <div class="bot-control">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="status-dot stopped" id="statusDot"></div>
+      <span id="statusText" style="font-size:13px;color:#8b949e">Stopped</span>
+    </div>
+    <button class="btn btn-primary" id="botToggle" onclick="toggleBot()">Start Bot</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Stats Bar -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat"><div class="stat-num" id="statDone">0</div><div class="stat-label">Posted</div></div>
+    <div class="stat"><div class="stat-num" id="statTarget">0</div><div class="stat-label">Target</div></div>
+    <div class="stat"><div class="stat-num" id="statSubs">0</div><div class="stat-label">Subreddits</div></div>
+    <div class="stat"><div class="stat-num" id="statTopics">0</div><div class="stat-label">Topics</div></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- Reddit Credentials -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Reddit API</h2>
+        <button class="btn btn-sm btn-outline" onclick="verifyLogin()">Test Login</button>
+      </div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Client ID <span id="envRedditId" class="saved-badge" style="display:none">SAVED</span></label>
+            <input type="text" id="redditClientId" placeholder="From reddit.com/prefs/apps">
+          </div>
+          <div class="form-group">
+            <label>Client Secret <span id="envRedditSecret" class="saved-badge" style="display:none">SAVED</span></label>
+            <input type="password" id="redditClientSecret" placeholder="Secret key">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Username <span id="envRedditUser" class="saved-badge" style="display:none">SAVED</span></label>
+            <input type="text" id="redditUsername" placeholder="u/yourname">
+          </div>
+          <div class="form-group">
+            <label>Password <span id="envRedditPass" class="saved-badge" style="display:none">SAVED</span></label>
+            <input type="password" id="redditPassword" placeholder="Account password">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveRedditCreds()">Save Credentials</button>
+      </div>
+    </div>
+
+    <!-- AI Settings -->
+    <div class="card">
+      <div class="card-header"><h2>AI Provider</h2></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Provider</label>
+            <select id="aiProvider" onchange="onProviderChange()">
+              <option value="openai">OpenAI (ChatGPT)</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="google">Google (Gemini)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>API Key <span id="envAiKey" class="saved-badge" style="display:none">SAVED</span></label>
+            <input type="password" id="aiApiKey" placeholder="Your API key">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-primary" onclick="saveAiSettings()">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schedule -->
+    <div class="card">
+      <div class="card-header"><h2>Schedule</h2></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start Hour</label>
+            <input type="number" id="startHour" min="0" max="23" value="8">
+          </div>
+          <div class="form-group">
+            <label>End Hour</label>
+            <input type="number" id="endHour" min="0" max="23" value="22">
+          </div>
+          <div class="form-group">
+            <label>Start Jitter (min)</label>
+            <input type="number" id="jitter" min="0" max="180" value="45">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Min Posts / Day</label>
+            <input type="number" id="minPosts" min="1" max="50" value="8">
+          </div>
+          <div class="form-group">
+            <label>Max Posts / Day</label>
+            <input type="number" id="maxPosts" min="1" max="50" value="12">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+      </div>
+    </div>
+
+    <!-- Post Now -->
+    <div class="card">
+      <div class="card-header"><h2>Quick Post</h2></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:#8b949e;margin-bottom:12px">Post immediately to a subreddit. Picks a random topic from your list.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Subreddit (optional)</label>
+            <input type="text" id="postNowSub" placeholder="Leave empty for random">
+          </div>
+        </div>
+        <button class="btn btn-blue" onclick="postNow()" id="postNowBtn">Post Now</button>
+      </div>
+    </div>
+
+    <!-- Subreddits -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Subreddits</h2>
+        <span id="subCount" style="font-size:12px;color:#8b949e">0</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input type="text" id="newSub" placeholder="Add subreddit name" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addSub()">
+          <button class="btn btn-primary btn-sm" onclick="addSub()">Add</button>
+        </div>
+        <div id="subsList" style="display:flex;flex-wrap:wrap;gap:2px"></div>
+      </div>
+    </div>
+
+    <!-- Topics -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Trending Topics</h2>
+        <span id="topicCount" style="font-size:12px;color:#8b949e">0</span>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input type="text" id="newTopic" placeholder="Add keyword from Google Trends" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addTopic()">
+          <button class="btn btn-primary btn-sm" onclick="addTopic()">Add</button>
+        </div>
+        <div id="topicsList" style="max-height:250px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- Today's Posts -->
+    <div class="card grid-full">
+      <div class="card-header">
+        <h2>Today's Posts</h2>
+        <span id="postDate" style="font-size:12px;color:#8b949e"></span>
+      </div>
+      <div class="card-body post-log" id="postLog">
+        <div class="empty">No posts yet today</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let botRunning = false;
+
+function toast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+async function loadConfig() {
+  const d = await api('/api/config');
+  const c = d.config;
+  const e = d.env_status;
+
+  document.getElementById('aiProvider').value = c.ai_provider;
+  document.getElementById('startHour').value = c.schedule.start_hour;
+  document.getElementById('endHour').value = c.schedule.end_hour;
+  document.getElementById('jitter').value = c.schedule.daily_start_jitter_minutes || 0;
+  document.getElementById('minPosts').value = c.min_posts_per_day;
+  document.getElementById('maxPosts').value = c.max_posts_per_day;
+
+  // env badges
+  toggle('envRedditId', e.REDDIT_CLIENT_ID);
+  toggle('envRedditSecret', e.REDDIT_CLIENT_SECRET);
+  toggle('envRedditUser', e.REDDIT_USERNAME);
+  toggle('envRedditPass', e.REDDIT_PASSWORD);
+  updateAiKeyBadge(e);
+
+  // subreddits
+  renderSubs(c.subreddits);
+
+  // topics
+  renderTopics(d.topics);
+
+  document.getElementById('statSubs').textContent = c.subreddits.length;
+  document.getElementById('statTopics').textContent = d.topics.length;
+}
+
+function toggle(id, show) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.style.display = show ? 'inline-flex' : 'none';
+    if (!show) { el.className = 'saved-badge not-saved'; el.textContent = 'NOT SET'; }
+    else { el.className = 'saved-badge'; el.textContent = 'SAVED'; }
+  }
+}
+
+function updateAiKeyBadge(env) {
+  const prov = document.getElementById('aiProvider').value;
+  const map = {openai:'OPENAI_API_KEY', anthropic:'ANTHROPIC_API_KEY', google:'GOOGLE_API_KEY'};
+  toggle('envAiKey', env[map[prov]]);
+}
+
+function onProviderChange() { loadConfig(); }
+
+function renderSubs(subs) {
+  const el = document.getElementById('subsList');
+  document.getElementById('subCount').textContent = subs.length;
+  document.getElementById('statSubs').textContent = subs.length;
+  el.innerHTML = subs.map(s =>
+    `<span class="tag">r/${s} <button class="tag-x" onclick="removeSub('${s}')">&times;</button></span>`
+  ).join('');
+}
+
+function renderTopics(topics) {
+  const el = document.getElementById('topicsList');
+  document.getElementById('topicCount').textContent = topics.length;
+  document.getElementById('statTopics').textContent = topics.length;
+  if (!topics.length) { el.innerHTML = '<div class="empty">No topics yet. Add trending keywords above.</div>'; return; }
+  el.innerHTML = topics.map((t, i) =>
+    `<div class="topic-item"><span class="topic-idx">${i+1}</span><span class="topic-text">${esc(t)}</span><button class="tag-x" onclick="removeTopic(${i})">&times;</button></div>`
+  ).join('');
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+async function loadStatus() {
+  const d = await api('/api/status');
+  botRunning = d.bot_running;
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  const btn = document.getElementById('botToggle');
+
+  dot.className = 'status-dot ' + d.bot.state;
+  txt.textContent = d.bot.message;
+  btn.textContent = botRunning ? 'Stop Bot' : 'Start Bot';
+  btn.className = botRunning ? 'btn btn-danger' : 'btn btn-primary';
+
+  document.getElementById('statDone').textContent = d.posts_done;
+  document.getElementById('statTarget').textContent = d.target;
+  document.getElementById('postDate').textContent = d.today;
+
+  const log = document.getElementById('postLog');
+  if (!d.posts.length) {
+    log.innerHTML = '<div class="empty">No posts yet today</div>';
+  } else {
+    log.innerHTML = d.posts.map(p =>
+      `<div class="post-entry">
+        <span class="post-time">${p.time}</span>
+        <span class="post-sub">r/${p.subreddit}</span>
+        <span class="post-topic">${esc(p.topic)}</span>
+        <a class="post-link" href="${p.url}" target="_blank">view &rarr;</a>
+      </div>`
+    ).join('');
+  }
+}
+
+async function toggleBot() {
+  if (botRunning) {
+    await api('/api/bot/stop', {method:'POST'});
+    toast('Bot stopping...');
+  } else {
+    await api('/api/bot/start', {method:'POST'});
+    toast('Bot started!');
+  }
+  setTimeout(loadStatus, 500);
+}
+
+async function saveRedditCreds() {
+  const data = {
+    REDDIT_CLIENT_ID: document.getElementById('redditClientId').value,
+    REDDIT_CLIENT_SECRET: document.getElementById('redditClientSecret').value,
+    REDDIT_USERNAME: document.getElementById('redditUsername').value,
+    REDDIT_PASSWORD: document.getElementById('redditPassword').value,
+  };
+  const r = await api('/api/credentials', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  if (r.ok) { toast('Reddit credentials saved'); loadConfig(); }
+}
+
+async function saveAiSettings() {
+  const provider = document.getElementById('aiProvider').value;
+  const key = document.getElementById('aiApiKey').value;
+  const map = {openai:'OPENAI_API_KEY', anthropic:'ANTHROPIC_API_KEY', google:'GOOGLE_API_KEY'};
+
+  await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ai_provider: provider})});
+  if (key) {
+    await api('/api/credentials', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({[map[provider]]: key})});
+  }
+  toast('AI settings saved');
+  document.getElementById('aiApiKey').value = '';
+  loadConfig();
+}
+
+async function saveSchedule() {
+  const data = {
+    min_posts_per_day: document.getElementById('minPosts').value,
+    max_posts_per_day: document.getElementById('maxPosts').value,
+    schedule: {
+      start_hour: document.getElementById('startHour').value,
+      end_hour: document.getElementById('endHour').value,
+      daily_start_jitter_minutes: document.getElementById('jitter').value,
+    }
+  };
+  await api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+  toast('Schedule saved');
+}
+
+async function addSub() {
+  const input = document.getElementById('newSub');
+  const name = input.value.trim().replace(/^r\//, '');
+  if (!name) return;
+  const r = await api('/api/subreddits', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
+  if (r.ok) { renderSubs(r.subreddits); input.value = ''; toast('Subreddit added'); }
+}
+
+async function removeSub(name) {
+  const r = await api('/api/subreddits/' + name, {method:'DELETE'});
+  if (r.ok) { renderSubs(r.subreddits); toast('Subreddit removed'); }
+}
+
+async function addTopic() {
+  const input = document.getElementById('newTopic');
+  const topic = input.value.trim();
+  if (!topic) return;
+  const r = await api('/api/topics', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic})});
+  if (r.ok) { renderTopics(r.topics); input.value = ''; toast('Topic added'); }
+}
+
+async function removeTopic(idx) {
+  const r = await api('/api/topics/' + idx, {method:'DELETE'});
+  if (r.ok) { renderTopics(r.topics); toast('Topic removed'); }
+}
+
+async function postNow() {
+  const btn = document.getElementById('postNowBtn');
+  btn.disabled = true; btn.textContent = 'Posting...';
+  const sub = document.getElementById('postNowSub').value.trim().replace(/^r\//, '');
+  const r = await api('/api/post-now', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({subreddit: sub})});
+  btn.disabled = false; btn.textContent = 'Post Now';
+  if (r.ok) { toast(`Posted to r/${r.subreddit}!`); loadStatus(); }
+  else toast(r.error || 'Failed to post', 'error');
+}
+
+async function verifyLogin() {
+  const r = await api('/api/verify-login', {method:'POST'});
+  if (r.ok) toast(`Login OK — u/${r.username}`);
+  else toast(r.error || 'Login failed', 'error');
+}
+
+// init
+loadConfig();
+loadStatus();
+setInterval(loadStatus, 5000);
+</script>
+</body>
+</html>
