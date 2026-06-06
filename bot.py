@@ -4,7 +4,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -121,9 +121,15 @@ def do_post(subreddit, topic_line, config):
     provider = config["ai_provider"]
     is_image = topic["image"] is not None
 
+    # pull recent titles so the post matches how this community actually writes
+    try:
+        example_titles = reddit_poster.get_recent_titles(subreddit)
+    except Exception:
+        example_titles = None
+
     print(f"  Generating content with {provider}...")
     content = content_generator.generate_content(
-        topic["text"], subreddit, provider, is_image
+        topic["text"], subreddit, provider, is_image, example_titles
     )
 
     title = content["title"]
@@ -141,11 +147,36 @@ def do_post(subreddit, topic_line, config):
         return topic["text"], post_id, post_url, "text"
 
 
+# cache the randomized start time per day so it stays put within a day but
+# shifts day to day (posting at the exact same minute daily is a bot tell)
+_daily_start_cache = {}
+
+
+def _start_minute_for(day_key, config):
+    if day_key not in _daily_start_cache:
+        jitter = config["schedule"].get("daily_start_jitter_minutes", 0)
+        offset = random.randint(0, jitter) if jitter else 0
+        _daily_start_cache[day_key] = config["schedule"]["start_hour"] * 60 + offset
+    return _daily_start_cache[day_key]
+
+
 def is_within_schedule(config):
-    now = datetime.now().hour
-    start = config["schedule"]["start_hour"]
-    end = config["schedule"]["end_hour"]
-    return start <= now < end
+    now = datetime.now()
+    now_min = now.hour * 60 + now.minute
+    start_min = _start_minute_for(now.date().isoformat(), config)
+    end_min = config["schedule"]["end_hour"] * 60
+    return start_min <= now_min < end_min
+
+
+def next_start_datetime(config):
+    now = datetime.now()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = midnight + timedelta(minutes=_start_minute_for(now.date().isoformat(), config))
+    if now < today_start:
+        return today_start
+    tomorrow = now + timedelta(days=1)
+    start_min = _start_minute_for(tomorrow.date().isoformat(), config)
+    return tomorrow.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=start_min)
 
 
 def run_bot():
@@ -172,14 +203,10 @@ def run_bot():
 
     while True:
         if not is_within_schedule(config):
-            now = datetime.now()
-            start = config["schedule"]["start_hour"]
-            if now.hour >= config["schedule"]["end_hour"]:
-                wake = now.replace(day=now.day + 1, hour=start, minute=0, second=0)
-            else:
-                wake = now.replace(hour=start, minute=0, second=0)
-            wait_secs = (wake - now).total_seconds()
-            print(f"Outside schedule. Sleeping until {start}:00 ({int(wait_secs // 3600)}h {int((wait_secs % 3600) // 60)}m)")
+            wake = next_start_datetime(config)
+            wait_secs = max((wake - datetime.now()).total_seconds(), 60)
+            print(f"Outside schedule. Sleeping until {wake.strftime('%Y-%m-%d %H:%M')} "
+                  f"({int(wait_secs // 3600)}h {int((wait_secs % 3600) // 60)}m)")
             time.sleep(wait_secs)
             log = load_log()
             continue
@@ -187,14 +214,10 @@ def run_bot():
         pending = get_pending_subreddits(config, log)
 
         if not pending:
-            now = datetime.now()
-            tomorrow_start = now.replace(
-                day=now.day + 1,
-                hour=config["schedule"]["start_hour"],
-                minute=0, second=0,
-            )
-            wait_secs = (tomorrow_start - now).total_seconds()
-            print(f"All posts done for today. Sleeping until tomorrow ({int(wait_secs // 3600)}h)")
+            wake = next_start_datetime(config)
+            wait_secs = max((wake - datetime.now()).total_seconds(), 60)
+            print(f"All posts done for today. Sleeping until {wake.strftime('%Y-%m-%d %H:%M')} "
+                  f"({int(wait_secs // 3600)}h)")
             time.sleep(wait_secs)
             log = load_log()
             continue

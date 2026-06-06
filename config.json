@@ -17,6 +17,7 @@
     "start_hour": 8,
     "end_hour": 22,
     "min_delay_minutes": 30,
-    "max_delay_minutes": 120
+    "max_delay_minutes": 120,
+    "daily_start_jitter_minutes": 90
   }
 }

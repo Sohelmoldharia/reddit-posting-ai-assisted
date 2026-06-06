@@ -26,6 +26,20 @@ def post_image(subreddit_name, title, image_path):
     return submission.id, submission.url
 
 
+def get_recent_titles(subreddit_name, limit=10):
+    """Pull recent non-stickied post titles so the AI can match the community's voice."""
+    reddit = _get_reddit()
+    subreddit = reddit.subreddit(subreddit_name)
+    titles = []
+    for post in subreddit.hot(limit=limit + 6):
+        if post.stickied:
+            continue
+        titles.append(post.title)
+        if len(titles) >= limit:
+            break
+    return titles
+
+
 def verify_login():
     reddit = _get_reddit()
     user = reddit.user.me()
