@@ -13,10 +13,12 @@ from flask import Flask, render_template, request, jsonify, send_file
 import content_generator
 import image_finder
 import reddit_poster
+import trends
 
 load_dotenv()
 
 app = Flask(__name__)
+_error_log = []
 
 CONFIG_PATH = Path("config.json")
 TOPICS_PATH = Path("topics.txt")
@@ -124,6 +126,39 @@ def clean_subreddit(raw):
     return s.strip().lower()
 
 
+def log_error(msg):
+    _error_log.append({"time": datetime.now().strftime("%H:%M:%S"), "message": str(msg)})
+    if len(_error_log) > 100:
+        _error_log.pop(0)
+
+
+def sub_on_cooldown(log, subreddit, cooldown_hours):
+    """Check if a subreddit was posted to within the cooldown window."""
+    if cooldown_hours <= 0:
+        return False
+    now = datetime.now()
+    for day_key in [get_today(), (now - timedelta(days=1)).date().isoformat()]:
+        day_data = log.get(day_key, {})
+        for p in day_data.get(subreddit, []):
+            post_day = datetime.strptime(day_key + " " + p["time"], "%Y-%m-%d %H:%M:%S")
+            if (now - post_day).total_seconds() < cooldown_hours * 3600:
+                return True
+    return False
+
+
+def get_week_posts(log):
+    """Get posts from the last 7 days."""
+    today = date.today()
+    week = []
+    for i in range(7):
+        day = (today - timedelta(days=i)).isoformat()
+        day_data = log.get(day, {})
+        for sub, posts in day_data.items():
+            for p in posts:
+                week.append({**p, "subreddit": sub, "date": day})
+    return week
+
+
 # ─── scheduled posts ───
 
 def load_scheduled():
@@ -219,12 +254,16 @@ def pick_topic(topics, log):
 
 
 def pick_subreddit(config, log):
-    today_data = log.get(get_today(), {})
     subs = config["subreddits"]
-    unposted = [s for s in subs if s not in today_data]
+    cooldown = config.get("cooldown_hours", 24)
+    available = [s for s in subs if not sub_on_cooldown(log, s, cooldown)]
+    if not available:
+        available = subs
+    today_data = log.get(get_today(), {})
+    unposted = [s for s in available if s not in today_data]
     if unposted:
         return random.choice(unposted)
-    return random.choice(subs)
+    return random.choice(available)
 
 
 def do_post(subreddit, topic_line, config):
@@ -322,6 +361,7 @@ def bot_loop():
             }
         except Exception as e:
             _bot_status["message"] = f"Failed posting to r/{subreddit}: {e}"
+            log_error(f"r/{subreddit}: {e}")
 
         # compute delay
         now = datetime.now()
@@ -397,6 +437,8 @@ def api_save_config():
         config["min_posts_per_day"] = int(data["min_posts_per_day"])
     if "max_posts_per_day" in data:
         config["max_posts_per_day"] = int(data["max_posts_per_day"])
+    if "cooldown_hours" in data:
+        config["cooldown_hours"] = int(data["cooldown_hours"])
     if "schedule" in data:
         for k, v in data["schedule"].items():
             config["schedule"][k] = int(v)
@@ -659,6 +701,100 @@ def api_meme_title():
         return jsonify({"ok": True, "title": content["title"]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ─── auto pilot ───
+
+@app.route("/api/autopilot/trends", methods=["POST"])
+def api_fetch_trends():
+    geo = request.json.get("geo", "US") if request.json else "US"
+    try:
+        trending = trends.fetch_google_trends(geo=geo)
+        return jsonify({"ok": True, "trends": trending})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/autopilot/plan", methods=["POST"])
+def api_generate_plan():
+    data = request.json
+    trending = data.get("trends", [])
+    config = load_config()
+    if not trending:
+        try:
+            trending = trends.fetch_google_trends(geo=data.get("geo", "US"))
+        except Exception as e:
+            return jsonify({"error": f"Failed to fetch trends: {e}"}), 500
+    try:
+        plan = content_generator.generate_day_plan(
+            trending, config["subreddits"], config["ai_provider"]
+        )
+        return jsonify({"ok": True, "plan": plan, "trends": trending})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/autopilot/execute", methods=["POST"])
+def api_execute_plan():
+    data = request.json
+    plan = data.get("plan", [])
+    if not plan:
+        return jsonify({"error": "No plan provided"}), 400
+    config = load_config()
+    log = load_log()
+    results = []
+    for item in plan:
+        sub = clean_subreddit(item.get("subreddit", ""))
+        topic = item.get("angle") or item.get("topic", "")
+        if not sub or not topic:
+            continue
+        try:
+            topic_text, post_id, post_url, post_type = do_post(sub, topic, config)
+            today = get_today()
+            if today not in log:
+                log[today] = {}
+            if sub not in log[today]:
+                log[today][sub] = []
+            log[today][sub].append({
+                "topic": topic_text, "post_id": post_id,
+                "url": post_url, "type": post_type,
+                "time": datetime.now().strftime("%H:%M:%S"),
+            })
+            save_log(log)
+            results.append({"subreddit": sub, "topic": topic_text, "url": post_url, "status": "posted"})
+        except Exception as e:
+            results.append({"subreddit": sub, "topic": topic, "status": "failed", "error": str(e)})
+            log_error(f"Auto pilot r/{sub}: {e}")
+    return jsonify({"ok": True, "results": results})
+
+
+# ─── bulk topics ───
+
+@app.route("/api/topics/bulk", methods=["POST"])
+def api_bulk_topics():
+    data = request.json
+    text = data.get("text", "")
+    new_topics = [line.strip() for line in text.strip().splitlines() if line.strip() and not line.strip().startswith("#")]
+    if not new_topics:
+        return jsonify({"error": "No topics found"}), 400
+    topics = load_topics()
+    topics.extend(new_topics)
+    save_topics(topics)
+    return jsonify({"ok": True, "topics": topics, "added": len(new_topics)})
+
+
+# ─── error log & week history ───
+
+@app.route("/api/errors")
+def api_errors():
+    return jsonify({"errors": list(reversed(_error_log))})
+
+
+@app.route("/api/history")
+def api_history():
+    log = load_log()
+    week = get_week_posts(log)
+    return jsonify({"posts": week})
 
 
 if __name__ == "__main__":

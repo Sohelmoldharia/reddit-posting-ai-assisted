@@ -107,6 +107,26 @@ a{color:#58a6ff;text-decoration:none}
 .tab-content{display:none}
 .tab-content.active{display:block}
 
+.plan-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #21262d}
+.plan-item:last-child{border-bottom:none}
+.plan-sub{color:#58a6ff;font-size:13px;font-weight:600;min-width:110px}
+.plan-topic{color:#e3b341;font-size:13px;min-width:120px}
+.plan-angle{color:#c9d1d9;font-size:13px;flex:1}
+.plan-status{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.plan-status.posted{background:#1c2128;color:#3fb950;border:1px solid #3fb950}
+.plan-status.failed{background:#1c2128;color:#f85149;border:1px solid #f85149}
+.plan-status.waiting{background:#1c2128;color:#e3b341;border:1px solid #e3b341}
+
+.trend-chip{display:inline-block;background:#1c2128;border:1px solid #30363d;padding:4px 10px;border-radius:12px;font-size:12px;margin:2px;color:#c9d1d9}
+.trend-traffic{color:#8b949e;font-size:11px}
+
+.error-item{padding:8px 14px;border-bottom:1px solid #21262d;font-size:13px}
+.error-time{color:#484f58;font-family:monospace;font-size:12px;margin-right:10px}
+
+.autopilot-box{background:linear-gradient(135deg,#161b22,#1c2128);border:1px solid #8957e5;border-radius:10px;padding:20px;margin-bottom:20px}
+.autopilot-box h2{color:#a371f7;font-size:16px;margin-bottom:4px}
+.autopilot-box p{color:#8b949e;font-size:13px;margin-bottom:14px}
+
 @media(max-width:768px){.grid{grid-template-columns:1fr}.form-row{flex-direction:column}}
 </style>
 </head>
@@ -134,6 +154,30 @@ a{color:#58a6ff;text-decoration:none}
     <div class="stat"><div class="stat-num" id="statSched">0</div><div class="stat-label">Scheduled</div></div>
     <div class="stat"><div class="stat-num" id="statSubs">0</div><div class="stat-label">Subreddits</div></div>
     <div class="stat"><div class="stat-num" id="statTopics">0</div><div class="stat-label">Topics</div></div>
+  </div>
+
+  <!-- Auto Pilot -->
+  <div class="autopilot-box">
+    <h2>Auto Pilot</h2>
+    <p>One click — AI fetches Google Trends, matches topics to your subs, and posts everything.</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select id="trendsGeo" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:13px">
+        <option value="US">US Trends</option>
+        <option value="GB">UK Trends</option>
+        <option value="IN">India Trends</option>
+        <option value="CA">Canada Trends</option>
+        <option value="AU">Australia Trends</option>
+      </select>
+      <button class="btn btn-purple" onclick="runAutoPilot()" id="autoPilotBtn">Generate Plan</button>
+      <button class="btn btn-primary" onclick="executeAutoPlan()" id="executeBtn" style="display:none">Post All Now</button>
+      <span id="autoPilotStatus" style="font-size:13px;color:#8b949e"></span>
+    </div>
+    <div id="autoPlanArea" style="display:none;margin-top:14px">
+      <div style="margin-bottom:8px;font-size:12px;color:#8b949e">TRENDING NOW</div>
+      <div id="trendsChips" style="margin-bottom:14px"></div>
+      <div style="margin-bottom:8px;font-size:12px;color:#8b949e">AI PLAN</div>
+      <div id="autoPlanList" style="background:#0d1117;border:1px solid #30363d;border-radius:8px;max-height:300px;overflow-y:auto"></div>
+    </div>
   </div>
 
   <div class="grid">
@@ -218,7 +262,12 @@ a{color:#58a6ff;text-decoration:none}
             <label>Max Posts / Day</label>
             <input type="number" id="maxPosts" min="1" max="50" value="12">
           </div>
+          <div class="form-group">
+            <label>Cooldown (Hours)</label>
+            <input type="number" id="cooldown" min="0" max="72" value="24">
+          </div>
         </div>
+        <p style="font-size:12px;color:#484f58;margin-bottom:10px">Cooldown = min hours between posts to the same sub. Set 0 to disable.</p>
         <button class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
       </div>
     </div>
@@ -328,6 +377,11 @@ a{color:#58a6ff;text-decoration:none}
         <div style="display:flex;gap:8px;margin-bottom:12px">
           <input type="text" id="newTopic" placeholder="Keyword from Google Trends" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addTopic()">
           <button class="btn btn-primary btn-sm" onclick="addTopic()">Add</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleBulk()">Bulk Add</button>
+        </div>
+        <div id="bulkArea" style="display:none;margin-bottom:12px">
+          <textarea id="bulkTopics" placeholder="Paste multiple topics, one per line" style="width:100%;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:10px;border-radius:6px;font-size:13px;min-height:80px;font-family:inherit;outline:none;margin-bottom:8px"></textarea>
+          <button class="btn btn-primary btn-sm" onclick="bulkAddTopics()">Add All</button>
         </div>
         <div id="topicsList" style="max-height:220px;overflow-y:auto"></div>
       </div>
@@ -369,14 +423,30 @@ a{color:#58a6ff;text-decoration:none}
       </div>
     </div>
 
-    <!-- Today's Posts -->
+    <!-- Today's Posts + History + Errors -->
     <div class="card grid-full">
       <div class="card-header">
-        <h2>Today's Posts</h2>
-        <span id="postDate" style="font-size:12px;color:#8b949e"></span>
+        <h2>Posts</h2>
+        <div class="tabs" style="border:none;margin:0">
+          <div class="tab active" onclick="switchLogTab(this,'logToday')">Today</div>
+          <div class="tab" onclick="switchLogTab(this,'logWeek')">This Week</div>
+          <div class="tab" onclick="switchLogTab(this,'logErrors')">Errors</div>
+        </div>
       </div>
-      <div class="card-body post-log" id="postLog">
-        <div class="empty">No posts yet today</div>
+      <div id="logToday" class="tab-content active">
+        <div class="card-body post-log" id="postLog">
+          <div class="empty">No posts yet today</div>
+        </div>
+      </div>
+      <div id="logWeek" class="tab-content">
+        <div class="card-body post-log" id="weekLog">
+          <div class="empty">Loading...</div>
+        </div>
+      </div>
+      <div id="logErrors" class="tab-content">
+        <div class="card-body" id="errorLog" style="max-height:300px;overflow-y:auto">
+          <div class="empty">No errors</div>
+        </div>
       </div>
     </div>
 
@@ -425,6 +495,8 @@ async function loadConfig() {
   toggle('envRedditUser', e.REDDIT_USERNAME);
   toggle('envRedditPass', e.REDDIT_PASSWORD);
   updateAiKeyBadge(e);
+
+  document.getElementById('cooldown').value = c.cooldown_hours || 24;
 
   renderSubs(c.subreddits);
   renderTopics(d.topics);
@@ -564,6 +636,7 @@ async function saveSchedule() {
   const data = {
     min_posts_per_day: document.getElementById('minPosts').value,
     max_posts_per_day: document.getElementById('maxPosts').value,
+    cooldown_hours: document.getElementById('cooldown').value,
     schedule: {
       start_hour: document.getElementById('startHour').value,
       end_hour: document.getElementById('endHour').value,
@@ -735,6 +808,116 @@ async function postMeme() {
     document.getElementById('memePreviewArea').style.display = 'none';
     loadStatus();
   } else toast(r.error || 'Failed', 'error');
+}
+
+// Bulk topics
+function toggleBulk() {
+  const el = document.getElementById('bulkArea');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function bulkAddTopics() {
+  const text = document.getElementById('bulkTopics').value.trim();
+  if (!text) return;
+  const r = await api('/api/topics/bulk', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+  if (r.ok) {
+    renderTopics(r.topics);
+    document.getElementById('bulkTopics').value = '';
+    document.getElementById('bulkArea').style.display = 'none';
+    toast(`Added ${r.added} topics`);
+  } else toast(r.error || 'Failed', 'error');
+}
+
+// Auto Pilot
+let _currentPlan = [];
+
+async function runAutoPilot() {
+  const btn = document.getElementById('autoPilotBtn');
+  const geo = document.getElementById('trendsGeo').value;
+  btn.disabled = true; btn.textContent = 'Fetching Trends...';
+  document.getElementById('autoPilotStatus').textContent = '';
+
+  const r = await api('/api/autopilot/plan', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({geo})});
+  btn.disabled = false; btn.textContent = 'Generate Plan';
+
+  if (r.ok) {
+    _currentPlan = r.plan;
+    // show trends
+    const chips = document.getElementById('trendsChips');
+    chips.innerHTML = (r.trends || []).slice(0, 15).map(t =>
+      `<span class="trend-chip">${esc(t.keyword)} <span class="trend-traffic">${t.traffic || ''}</span></span>`
+    ).join('');
+    // show plan
+    const list = document.getElementById('autoPlanList');
+    list.innerHTML = r.plan.map((p, i) =>
+      `<div class="plan-item" id="plan-${i}">
+        <span class="plan-sub">r/${p.subreddit}</span>
+        <span class="plan-topic">${esc(p.topic)}</span>
+        <span class="plan-angle">${esc(p.angle || '')}</span>
+        <span class="plan-status waiting">ready</span>
+      </div>`
+    ).join('');
+    document.getElementById('autoPlanArea').style.display = 'block';
+    document.getElementById('executeBtn').style.display = 'inline-block';
+    document.getElementById('autoPilotStatus').textContent = `${r.plan.length} posts planned`;
+  } else toast(r.error || 'Failed to generate plan', 'error');
+}
+
+async function executeAutoPlan() {
+  if (!_currentPlan.length) { toast('Generate a plan first', 'error'); return; }
+  const btn = document.getElementById('executeBtn');
+  btn.disabled = true; btn.textContent = 'Posting...';
+
+  const r = await api('/api/autopilot/execute', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({plan: _currentPlan})});
+  btn.disabled = false; btn.textContent = 'Post All Now';
+
+  if (r.ok) {
+    let posted = 0, failed = 0;
+    (r.results || []).forEach((res, i) => {
+      const el = document.getElementById('plan-' + i);
+      if (el) {
+        const badge = el.querySelector('.plan-status');
+        if (res.status === 'posted') { badge.className = 'plan-status posted'; badge.textContent = 'posted'; posted++; }
+        else { badge.className = 'plan-status failed'; badge.textContent = 'failed'; failed++; }
+      }
+    });
+    toast(`Done! ${posted} posted, ${failed} failed`);
+    loadStatus();
+  } else toast(r.error || 'Failed', 'error');
+}
+
+// Log tabs
+function switchLogTab(el, tabId) {
+  el.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const card = el.closest('.card');
+  card.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  if (tabId === 'logWeek') loadWeekHistory();
+  if (tabId === 'logErrors') loadErrors();
+}
+
+async function loadWeekHistory() {
+  const r = await api('/api/history');
+  const el = document.getElementById('weekLog');
+  if (!r.posts || !r.posts.length) { el.innerHTML = '<div class="empty">No posts this week</div>'; return; }
+  el.innerHTML = r.posts.map(p =>
+    `<div class="post-entry">
+      <span class="post-time" style="min-width:85px">${p.date.slice(5)} ${p.time}</span>
+      <span class="post-sub">r/${p.subreddit}</span>
+      <span class="post-topic">${esc(p.topic)}</span>
+      <a class="post-link" href="${p.url}" target="_blank">view &rarr;</a>
+    </div>`
+  ).join('');
+}
+
+async function loadErrors() {
+  const r = await api('/api/errors');
+  const el = document.getElementById('errorLog');
+  if (!r.errors || !r.errors.length) { el.innerHTML = '<div class="empty">No errors</div>'; return; }
+  el.innerHTML = r.errors.map(e =>
+    `<div class="error-item"><span class="error-time">${e.time}</span>${esc(e.message)}</div>`
+  ).join('');
 }
 
 // init

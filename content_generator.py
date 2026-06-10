@@ -328,3 +328,46 @@ def _generate_raw_google(prompt, system, temperature):
     model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=system)
     response = model.generate_content(prompt, generation_config={"temperature": temperature})
     return response.text
+
+
+# ─── auto pilot: AI plans the whole day ───
+
+AUTO_PLAN_SYSTEM = """You are a Reddit community manager planning today's posts.
+You will be given trending topics and a list of subreddits.
+Match relevant trending topics to subreddits where they'd actually fit.
+Not every sub needs a match — skip subs with no good fit.
+Pick angles that would genuinely interest that community.
+Return valid JSON only."""
+
+
+def generate_day_plan(trends, subreddits, provider="openai"):
+    trends_text = "\n".join(
+        f"- {t['keyword']}" + (f" ({t['context']})" if t.get('context') else "")
+        for t in trends[:25]
+    )
+    subs_text = "\n".join(f"- r/{s}" for s in subreddits)
+
+    prompt = f"""Today's trending topics:
+{trends_text}
+
+Subreddits to post in:
+{subs_text}
+
+For each subreddit, pick the most relevant trending topic and write a specific angle/spin for that community. If no trending topic fits a sub, come up with a general engaging topic that fits it.
+
+Return ONLY a JSON array:
+[
+  {{"subreddit": "name", "topic": "the keyword or topic", "angle": "specific angle for this sub"}}
+]"""
+
+    temperature = 0.7
+    if provider == "openai":
+        raw = _generate_raw_openai(prompt, AUTO_PLAN_SYSTEM, temperature)
+    elif provider == "anthropic":
+        raw = _generate_raw_anthropic(prompt, AUTO_PLAN_SYSTEM, temperature)
+    elif provider == "google":
+        raw = _generate_raw_google(prompt, AUTO_PLAN_SYSTEM, temperature)
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+
+    return _parse_response(raw)
