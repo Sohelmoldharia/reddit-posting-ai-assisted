@@ -1,8 +1,0 @@
-# Add one topic per line (from Google Trends or your own ideas)
-# Lines starting with # are ignored
-# For image posts, use: [image:path/to/image.jpg] Your topic here
-#
-# Examples:
-# AI tools that are actually useful for everyday work
-# Best budget smartphones in 2025
-# [image:images/sunset.jpg] Amazing sunset from my evening hike
