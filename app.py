@@ -13,7 +13,6 @@ from flask import Flask, render_template, request, jsonify, send_file
 import browser_poster
 import content_generator
 import image_finder
-import reddit_poster
 import trends
 
 load_dotenv()
@@ -33,12 +32,6 @@ _bot_status = {"state": "stopped", "message": "Bot is not running", "last_post":
 _daily_start_cache = {}
 _daily_target_cache = {}
 _browser_login_active = False
-
-
-def _get_poster(config):
-    if config.get("posting_method") == "browser":
-        return browser_poster
-    return reddit_poster
 
 
 # ─── helpers ───
@@ -278,9 +271,8 @@ def do_post(subreddit, topic_line, config):
     topic = parse_topic(topic_line)
     provider = config["ai_provider"]
     is_image = topic["image"] is not None
-    poster = _get_poster(config)
     try:
-        example_titles = poster.get_recent_titles(subreddit)
+        example_titles = browser_poster.get_recent_titles(subreddit)
     except Exception:
         example_titles = None
     content = content_generator.generate_content(
@@ -288,11 +280,11 @@ def do_post(subreddit, topic_line, config):
     )
     title = content["title"]
     if is_image and os.path.exists(topic["image"]):
-        post_id, post_url = poster.post_image(subreddit, title, topic["image"])
+        post_id, post_url = browser_poster.post_image(subreddit, title, topic["image"])
         return topic["text"], post_id, post_url, "image"
     else:
         body = content.get("body", "")
-        post_id, post_url = poster.post_text(subreddit, title, body)
+        post_id, post_url = browser_poster.post_text(subreddit, title, body)
         return topic["text"], post_id, post_url, "text"
 
 
@@ -301,10 +293,8 @@ def bot_loop():
 
     _bot_status = {"state": "running", "message": "Starting up...", "last_post": None}
 
-    config = load_config()
-    poster = _get_poster(config)
     try:
-        user = poster.verify_login()
+        user = browser_poster.verify_login()
         _bot_status["message"] = f"Logged in as u/{user}"
     except Exception as e:
         _bot_status = {"state": "error", "message": f"Login failed: {e}", "last_post": None}
@@ -442,8 +432,6 @@ def api_get_config():
 def api_save_config():
     data = request.json
     config = load_config()
-    if "posting_method" in data:
-        config["posting_method"] = data["posting_method"]
     if "ai_provider" in data:
         config["ai_provider"] = data["ai_provider"]
     if "min_posts_per_day" in data:
@@ -562,10 +550,8 @@ def api_post_now():
 
 @app.route("/api/verify-login", methods=["POST"])
 def api_verify_login():
-    config = load_config()
-    poster = _get_poster(config)
     try:
-        user = poster.verify_login()
+        user = browser_poster.verify_login()
         return jsonify({"ok": True, "username": user})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -663,9 +649,8 @@ def api_comment_preview():
     if not url:
         return jsonify({"error": "URL is required"}), 400
     config = load_config()
-    poster = _get_poster(config)
     try:
-        post_info = poster.get_post_info(url)
+        post_info = browser_poster.get_post_info(url)
         comment_text = content_generator.generate_comment(post_info, config["ai_provider"])
         return jsonify({"ok": True, "post_info": post_info, "comment": comment_text})
     except Exception as e:
@@ -679,10 +664,8 @@ def api_comment_post():
     comment_body = data.get("comment", "").strip()
     if not url or not comment_body:
         return jsonify({"error": "URL and comment are required"}), 400
-    config = load_config()
-    poster = _get_poster(config)
     try:
-        comment_id, comment_url = poster.post_comment(url, comment_body)
+        comment_id, comment_url = browser_poster.post_comment(url, comment_body)
         return jsonify({"ok": True, "comment_id": comment_id, "comment_url": comment_url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -724,9 +707,8 @@ def api_meme_post():
     if not os.path.exists(image_path):
         return jsonify({"error": "Image file not found. Search again."}), 400
     config = load_config()
-    poster = _get_poster(config)
     try:
-        post_id, post_url = poster.post_image(subreddit, title, image_path)
+        post_id, post_url = browser_poster.post_image(subreddit, title, image_path)
         log = load_log()
         today = get_today()
         if today not in log:
