@@ -1,9 +1,11 @@
+import math
 import os
 import time
 import random
 from pathlib import Path
 
 STATE_DIR = Path("browser_data")
+_mouse_pos = [300, 400]
 
 
 def _stealth_args():
@@ -13,6 +15,105 @@ def _stealth_args():
         "--no-default-browser-check",
     ]
 
+
+def _headless_ctx(p):
+    return p.chromium.launch_persistent_context(
+        str(STATE_DIR),
+        headless=True,
+        viewport={"width": 1280, "height": 800},
+        args=_stealth_args(),
+    )
+
+
+# ─── human mouse & keyboard ───
+
+def _bezier(t, p0, p1, p2):
+    return (
+        (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t ** 2 * p2[0],
+        (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t ** 2 * p2[1],
+    )
+
+
+def _human_move(page, x, y):
+    sx, sy = _mouse_pos
+    dx, dy = x - sx, y - sy
+    dist = math.hypot(dx, dy) or 1
+
+    mx, my = (sx + x) / 2, (sy + y) / 2
+    perp = random.uniform(-0.35, 0.35) * dist
+    cx = mx + (-dy / dist) * perp
+    cy = my + (dx / dist) * perp
+
+    steps = max(int(dist / 12), 8) + random.randint(-2, 4)
+    for i in range(steps + 1):
+        t = i / steps
+        t = t * t * (3 - 2 * t)
+        px, py = _bezier(t, (sx, sy), (cx, cy), (x, y))
+        px += random.gauss(0, 0.8)
+        py += random.gauss(0, 0.8)
+        page.mouse.move(px, py)
+        speed = random.uniform(0.004, 0.016)
+        if t < 0.15 or t > 0.85:
+            speed *= 2
+        time.sleep(speed)
+
+    _mouse_pos[0], _mouse_pos[1] = x, y
+
+
+def _human_click(page, el):
+    box = el.bounding_box()
+    if not box:
+        el.click()
+        return
+    x = box["x"] + box["width"] * random.uniform(0.2, 0.8)
+    y = box["y"] + box["height"] * random.uniform(0.25, 0.75)
+    _human_move(page, x, y)
+    time.sleep(random.uniform(0.04, 0.12))
+    page.mouse.click(x, y)
+
+
+def _human_type(page, el, text):
+    _human_click(page, el)
+    time.sleep(random.uniform(0.15, 0.4))
+
+    if len(text) <= 120:
+        for char in text:
+            page.keyboard.type(char)
+            d = random.uniform(0.025, 0.09)
+            if char in " \n":
+                d += random.uniform(0.02, 0.08)
+            if char in ".,!?":
+                d += random.uniform(0.04, 0.15)
+            if random.random() < 0.03:
+                d += random.uniform(0.2, 0.6)
+            if random.random() < 0.12:
+                d *= 0.3
+            time.sleep(d)
+    else:
+        pos = 0
+        while pos < len(text):
+            chunk = random.randint(2, 6)
+            page.keyboard.type(text[pos : pos + chunk])
+            pos += chunk
+            d = random.uniform(0.04, 0.14)
+            end_char = text[min(pos - 1, len(text) - 1)]
+            if end_char in " \n.!?,":
+                d += random.uniform(0.05, 0.2)
+            if random.random() < 0.05:
+                d += random.uniform(0.3, 0.8)
+            time.sleep(d)
+
+
+def _idle_pause():
+    time.sleep(random.uniform(0.6, 2.0))
+
+
+def _reset_mouse():
+    _mouse_pos[0] = random.randint(200, 600)
+    _mouse_pos[1] = random.randint(150, 400)
+
+
+# ─── login / session ───
 
 def open_login_browser():
     """Open a visible browser for user to log in to Reddit. Blocks until closed."""
@@ -47,9 +148,7 @@ def verify_login():
         raise Exception("No browser session. Click 'Open Browser' to log in first.")
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(STATE_DIR), headless=True, args=_stealth_args(),
-        )
+        context = _headless_ctx(p)
         page = context.new_page()
         try:
             page.goto("https://old.reddit.com", timeout=20000)
@@ -64,37 +163,36 @@ def verify_login():
             context.close()
 
 
-def _human_delay():
-    time.sleep(random.uniform(0.3, 1.2))
-
+# ─── posting ───
 
 def post_text(subreddit, title, body):
-    """Submit a text post via old.reddit.com form."""
+    """Submit a text post via old.reddit.com with human-like behavior."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(STATE_DIR), headless=True, args=_stealth_args(),
-        )
+        context = _headless_ctx(p)
         page = context.new_page()
+        _reset_mouse()
         try:
             page.goto(
                 f"https://old.reddit.com/r/{subreddit}/submit?selftext=true",
                 timeout=20000,
             )
             page.wait_for_load_state("domcontentloaded")
+            _idle_pause()
 
-            page.wait_for_selector('textarea[name="title"]', timeout=10000)
-            _human_delay()
-            page.fill('textarea[name="title"]', title)
-            _human_delay()
+            title_el = page.wait_for_selector('textarea[name="title"]', timeout=10000)
+            _human_type(page, title_el, title)
+            _idle_pause()
 
-            text_area = page.query_selector('textarea[name="text"]')
-            if text_area:
-                text_area.fill(body)
-            _human_delay()
+            text_el = page.query_selector('textarea[name="text"]')
+            if text_el and body:
+                _human_type(page, text_el, body)
+            _idle_pause()
 
-            page.click('button[name="submit"]')
+            submit_btn = page.query_selector('button[name="submit"]')
+            if submit_btn:
+                _human_click(page, submit_btn)
             page.wait_for_load_state("domcontentloaded", timeout=15000)
             time.sleep(2)
 
@@ -108,33 +206,34 @@ def post_text(subreddit, title, body):
 
 
 def post_image(subreddit, title, image_path):
-    """Submit an image post via old.reddit.com."""
+    """Submit an image post via old.reddit.com with human-like behavior."""
     from playwright.sync_api import sync_playwright
 
     abs_path = os.path.abspath(image_path)
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(STATE_DIR), headless=True, args=_stealth_args(),
-        )
+        context = _headless_ctx(p)
         page = context.new_page()
+        _reset_mouse()
         try:
             page.goto(
                 f"https://old.reddit.com/r/{subreddit}/submit",
                 timeout=20000,
             )
             page.wait_for_load_state("domcontentloaded")
+            _idle_pause()
 
-            page.wait_for_selector('textarea[name="title"]', timeout=10000)
-            _human_delay()
-            page.fill('textarea[name="title"]', title)
-            _human_delay()
+            title_el = page.wait_for_selector('textarea[name="title"]', timeout=10000)
+            _human_type(page, title_el, title)
+            _idle_pause()
 
             file_input = page.query_selector('input[type="file"]')
             if file_input:
                 file_input.set_input_files(abs_path)
-                _human_delay()
+                _idle_pause()
 
-            page.click('button[name="submit"]')
+            submit_btn = page.query_selector('button[name="submit"]')
+            if submit_btn:
+                _human_click(page, submit_btn)
             page.wait_for_load_state("domcontentloaded", timeout=30000)
             time.sleep(2)
 
@@ -148,7 +247,7 @@ def post_image(subreddit, title, image_path):
 
 
 def post_comment(post_url, comment_body):
-    """Comment on a post via old.reddit.com."""
+    """Comment on a post via old.reddit.com with human-like behavior."""
     from playwright.sync_api import sync_playwright
 
     old_url = post_url.replace("www.reddit.com", "old.reddit.com")
@@ -156,22 +255,21 @@ def post_comment(post_url, comment_body):
         old_url = old_url.replace("reddit.com", "old.reddit.com")
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(STATE_DIR), headless=True, args=_stealth_args(),
-        )
+        context = _headless_ctx(p)
         page = context.new_page()
+        _reset_mouse()
         try:
             page.goto(old_url, timeout=20000)
             page.wait_for_load_state("domcontentloaded")
-            _human_delay()
+            _idle_pause()
 
             comment_box = page.query_selector('textarea[name="text"]')
             if comment_box:
-                comment_box.fill(comment_body)
-                _human_delay()
+                _human_type(page, comment_box, comment_body)
+                _idle_pause()
                 save_btn = page.query_selector('button[type="submit"]')
                 if save_btn:
-                    save_btn.click()
+                    _human_click(page, save_btn)
                     page.wait_for_load_state("domcontentloaded", timeout=10000)
                     time.sleep(2)
 
@@ -179,6 +277,8 @@ def post_comment(post_url, comment_body):
         finally:
             context.close()
 
+
+# ─── scraping (no interaction needed) ───
 
 def get_post_info(url):
     """Scrape post info from old.reddit.com for comment generation."""
@@ -189,9 +289,7 @@ def get_post_info(url):
         old_url = old_url.replace("reddit.com", "old.reddit.com")
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(STATE_DIR), headless=True, args=_stealth_args(),
-        )
+        context = _headless_ctx(p)
         page = context.new_page()
         try:
             page.goto(old_url, timeout=20000)
@@ -224,11 +322,15 @@ def get_post_info(url):
                     pass
 
             top_comments = []
-            comment_els = page.query_selector_all("div.entry div.usertext-body div.md")
+            comment_els = page.query_selector_all(
+                "div.entry div.usertext-body div.md"
+            )
             for c_body in comment_els[1:9]:
                 cbody = c_body.text_content().strip()[:300]
                 if cbody:
-                    top_comments.append({"author": "user", "body": cbody, "score": 0})
+                    top_comments.append(
+                        {"author": "user", "body": cbody, "score": 0}
+                    )
 
             return {
                 "title": title,
@@ -247,12 +349,12 @@ def get_recent_titles(subreddit, limit=10):
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(STATE_DIR), headless=True, args=_stealth_args(),
-        )
+        context = _headless_ctx(p)
         page = context.new_page()
         try:
-            page.goto(f"https://old.reddit.com/r/{subreddit}", timeout=20000)
+            page.goto(
+                f"https://old.reddit.com/r/{subreddit}", timeout=20000
+            )
             page.wait_for_load_state("domcontentloaded")
             titles = page.eval_on_selector_all(
                 "a.title.may-blank",
