@@ -7,3 +7,4 @@ flask
 duckduckgo_search
 requests
 pytrends
+playwright

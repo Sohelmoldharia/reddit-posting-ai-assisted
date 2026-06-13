@@ -10,6 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv, set_key
 from flask import Flask, render_template, request, jsonify, send_file
 
+import browser_poster
 import content_generator
 import image_finder
 import reddit_poster
@@ -31,6 +32,13 @@ _bot_running = False
 _bot_status = {"state": "stopped", "message": "Bot is not running", "last_post": None}
 _daily_start_cache = {}
 _daily_target_cache = {}
+_browser_login_active = False
+
+
+def _get_poster(config):
+    if config.get("posting_method") == "browser":
+        return browser_poster
+    return reddit_poster
 
 
 # ─── helpers ───
@@ -270,8 +278,9 @@ def do_post(subreddit, topic_line, config):
     topic = parse_topic(topic_line)
     provider = config["ai_provider"]
     is_image = topic["image"] is not None
+    poster = _get_poster(config)
     try:
-        example_titles = reddit_poster.get_recent_titles(subreddit)
+        example_titles = poster.get_recent_titles(subreddit)
     except Exception:
         example_titles = None
     content = content_generator.generate_content(
@@ -279,11 +288,11 @@ def do_post(subreddit, topic_line, config):
     )
     title = content["title"]
     if is_image and os.path.exists(topic["image"]):
-        post_id, post_url = reddit_poster.post_image(subreddit, title, topic["image"])
+        post_id, post_url = poster.post_image(subreddit, title, topic["image"])
         return topic["text"], post_id, post_url, "image"
     else:
         body = content.get("body", "")
-        post_id, post_url = reddit_poster.post_text(subreddit, title, body)
+        post_id, post_url = poster.post_text(subreddit, title, body)
         return topic["text"], post_id, post_url, "text"
 
 
@@ -292,8 +301,10 @@ def bot_loop():
 
     _bot_status = {"state": "running", "message": "Starting up...", "last_post": None}
 
+    config = load_config()
+    poster = _get_poster(config)
     try:
-        user = reddit_poster.verify_login()
+        user = poster.verify_login()
         _bot_status["message"] = f"Logged in as u/{user}"
     except Exception as e:
         _bot_status = {"state": "error", "message": f"Login failed: {e}", "last_post": None}
@@ -431,6 +442,8 @@ def api_get_config():
 def api_save_config():
     data = request.json
     config = load_config()
+    if "posting_method" in data:
+        config["posting_method"] = data["posting_method"]
     if "ai_provider" in data:
         config["ai_provider"] = data["ai_provider"]
     if "min_posts_per_day" in data:
@@ -549,11 +562,50 @@ def api_post_now():
 
 @app.route("/api/verify-login", methods=["POST"])
 def api_verify_login():
+    config = load_config()
+    poster = _get_poster(config)
     try:
-        user = reddit_poster.verify_login()
+        user = poster.verify_login()
         return jsonify({"ok": True, "username": user})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+# ─── browser login routes ───
+
+@app.route("/api/browser/login", methods=["POST"])
+def api_browser_login():
+    global _browser_login_active
+    if _browser_login_active:
+        return jsonify({"error": "Browser is already open for login"}), 400
+    _browser_login_active = True
+
+    def run_login():
+        global _browser_login_active
+        try:
+            browser_poster.open_login_browser()
+        finally:
+            _browser_login_active = False
+
+    threading.Thread(target=run_login, daemon=True).start()
+    return jsonify({"ok": True, "message": "Browser opened — log in and close when done"})
+
+
+@app.route("/api/browser/verify", methods=["POST"])
+def api_browser_verify():
+    try:
+        user = browser_poster.verify_login()
+        return jsonify({"ok": True, "username": user})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/browser/status")
+def api_browser_status():
+    return jsonify({
+        "login_active": _browser_login_active,
+        "session_saved": browser_poster.is_session_saved(),
+    })
 
 
 # ─── scheduled posts routes ───
@@ -610,9 +662,10 @@ def api_comment_preview():
     url = data.get("url", "").strip()
     if not url:
         return jsonify({"error": "URL is required"}), 400
+    config = load_config()
+    poster = _get_poster(config)
     try:
-        post_info = reddit_poster.get_post_info(url)
-        config = load_config()
+        post_info = poster.get_post_info(url)
         comment_text = content_generator.generate_comment(post_info, config["ai_provider"])
         return jsonify({"ok": True, "post_info": post_info, "comment": comment_text})
     except Exception as e:
@@ -626,8 +679,10 @@ def api_comment_post():
     comment_body = data.get("comment", "").strip()
     if not url or not comment_body:
         return jsonify({"error": "URL and comment are required"}), 400
+    config = load_config()
+    poster = _get_poster(config)
     try:
-        comment_id, comment_url = reddit_poster.post_comment(url, comment_body)
+        comment_id, comment_url = poster.post_comment(url, comment_body)
         return jsonify({"ok": True, "comment_id": comment_id, "comment_url": comment_url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -668,8 +723,10 @@ def api_meme_post():
         return jsonify({"error": "subreddit, title, and image_path are required"}), 400
     if not os.path.exists(image_path):
         return jsonify({"error": "Image file not found. Search again."}), 400
+    config = load_config()
+    poster = _get_poster(config)
     try:
-        post_id, post_url = reddit_poster.post_image(subreddit, title, image_path)
+        post_id, post_url = poster.post_image(subreddit, title, image_path)
         log = load_log()
         today = get_today()
         if today not in log:

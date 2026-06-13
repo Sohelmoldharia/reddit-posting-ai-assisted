@@ -182,34 +182,57 @@ a{color:#58a6ff;text-decoration:none}
 
   <div class="grid">
 
-    <!-- Reddit Credentials -->
+    <!-- Login Method -->
     <div class="card">
       <div class="card-header">
-        <h2>Reddit API</h2>
-        <button class="btn btn-sm btn-outline" onclick="verifyLogin()">Test Login</button>
+        <h2>Login Method</h2>
+        <select id="postingMethod" onchange="switchPostingMethod()" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:5px 10px;border-radius:6px;font-size:13px;cursor:pointer">
+          <option value="browser">Browser (Natural)</option>
+          <option value="api">Reddit API</option>
+        </select>
       </div>
       <div class="card-body">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Client ID <span id="envRedditId" class="saved-badge" style="display:none">SAVED</span></label>
-            <input type="text" id="redditClientId" placeholder="From reddit.com/prefs/apps">
+        <!-- Browser Login -->
+        <div id="browserLoginSection">
+          <p style="font-size:13px;color:#8b949e;margin-bottom:14px">Log in through a real browser — posts look 100% natural, no API fingerprint.</p>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+            <button class="btn btn-primary" onclick="openBrowserLogin()" id="browserLoginBtn">Open Browser</button>
+            <button class="btn btn-outline btn-sm" onclick="verifyBrowserLogin()">Verify Session</button>
+            <span id="browserStatus" style="font-size:13px;color:#8b949e"></span>
           </div>
-          <div class="form-group">
-            <label>Client Secret <span id="envRedditSecret" class="saved-badge" style="display:none">SAVED</span></label>
-            <input type="password" id="redditClientSecret" placeholder="Secret key">
+          <div id="browserSessionInfo" style="display:none;background:#0d1117;border:1px solid #238636;border-radius:8px;padding:12px;display:flex;align-items:center;gap:8px">
+            <div class="status-dot running"></div>
+            <span style="color:#3fb950;font-weight:600;font-size:14px" id="browserUser"></span>
+          </div>
+          <p style="font-size:11px;color:#484f58;margin-top:10px">First time? Click "Open Browser", log in to Reddit, then close the window. Session stays saved.</p>
+        </div>
+        <!-- API Login (hidden by default) -->
+        <div id="apiLoginSection" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Client ID <span id="envRedditId" class="saved-badge" style="display:none">SAVED</span></label>
+              <input type="text" id="redditClientId" placeholder="From reddit.com/prefs/apps">
+            </div>
+            <div class="form-group">
+              <label>Client Secret <span id="envRedditSecret" class="saved-badge" style="display:none">SAVED</span></label>
+              <input type="password" id="redditClientSecret" placeholder="Secret key">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Username <span id="envRedditUser" class="saved-badge" style="display:none">SAVED</span></label>
+              <input type="text" id="redditUsername" placeholder="u/yourname">
+            </div>
+            <div class="form-group">
+              <label>Password <span id="envRedditPass" class="saved-badge" style="display:none">SAVED</span></label>
+              <input type="password" id="redditPassword" placeholder="Account password">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="saveRedditCreds()">Save Credentials</button>
+            <button class="btn btn-outline btn-sm" onclick="verifyLogin()">Test Login</button>
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Username <span id="envRedditUser" class="saved-badge" style="display:none">SAVED</span></label>
-            <input type="text" id="redditUsername" placeholder="u/yourname">
-          </div>
-          <div class="form-group">
-            <label>Password <span id="envRedditPass" class="saved-badge" style="display:none">SAVED</span></label>
-            <input type="password" id="redditPassword" placeholder="Account password">
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="saveRedditCreds()">Save Credentials</button>
       </div>
     </div>
 
@@ -483,6 +506,11 @@ async function loadConfig() {
   const c = d.config;
   const e = d.env_status;
 
+  const method = c.posting_method || 'browser';
+  document.getElementById('postingMethod').value = method;
+  document.getElementById('browserLoginSection').style.display = method === 'browser' ? 'block' : 'none';
+  document.getElementById('apiLoginSection').style.display = method === 'api' ? 'block' : 'none';
+
   document.getElementById('aiProvider').value = c.ai_provider;
   document.getElementById('startHour').value = c.schedule.start_hour;
   document.getElementById('endHour').value = c.schedule.end_hour;
@@ -503,6 +531,8 @@ async function loadConfig() {
 
   document.getElementById('statSubs').textContent = c.subreddits.length;
   document.getElementById('statTopics').textContent = d.topics.length;
+
+  if (method === 'browser') checkBrowserSession();
 }
 
 function toggle(id, show) {
@@ -687,6 +717,71 @@ async function verifyLogin() {
   const r = await api('/api/verify-login', {method:'POST'});
   if (r.ok) toast(`Login OK — u/${r.username}`);
   else toast(r.error || 'Login failed', 'error');
+}
+
+function switchPostingMethod() {
+  const method = document.getElementById('postingMethod').value;
+  document.getElementById('browserLoginSection').style.display = method === 'browser' ? 'block' : 'none';
+  document.getElementById('apiLoginSection').style.display = method === 'api' ? 'block' : 'none';
+  api('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({posting_method: method})});
+  toast(method === 'browser' ? 'Switched to Browser mode' : 'Switched to API mode');
+  if (method === 'browser') checkBrowserSession();
+}
+
+async function openBrowserLogin() {
+  const btn = document.getElementById('browserLoginBtn');
+  btn.disabled = true; btn.textContent = 'Opening...';
+  const r = await api('/api/browser/login', {method:'POST'});
+  if (r.ok) {
+    toast('Browser opened — log in to Reddit, then close the window');
+    btn.textContent = 'Browser Open...';
+    pollBrowserLogin();
+  } else {
+    toast(r.error || 'Failed to open browser', 'error');
+    btn.disabled = false; btn.textContent = 'Open Browser';
+  }
+}
+
+async function pollBrowserLogin() {
+  const r = await api('/api/browser/status');
+  const btn = document.getElementById('browserLoginBtn');
+  if (r.login_active) {
+    setTimeout(pollBrowserLogin, 2000);
+  } else {
+    btn.disabled = false; btn.textContent = 'Open Browser';
+    if (r.session_saved) {
+      toast('Browser closed — verifying session...');
+      verifyBrowserLogin();
+    }
+  }
+}
+
+async function verifyBrowserLogin() {
+  const status = document.getElementById('browserStatus');
+  status.textContent = 'Checking...';
+  status.style.color = '#8b949e';
+  const r = await api('/api/browser/verify', {method:'POST'});
+  const info = document.getElementById('browserSessionInfo');
+  if (r.ok) {
+    info.style.display = 'flex';
+    document.getElementById('browserUser').textContent = 'Logged in as u/' + r.username;
+    status.textContent = '';
+    toast('Session verified — u/' + r.username);
+  } else {
+    info.style.display = 'none';
+    status.textContent = 'Not logged in';
+    status.style.color = '#f85149';
+    toast(r.error || 'Not logged in', 'error');
+  }
+}
+
+async function checkBrowserSession() {
+  const r = await api('/api/browser/status');
+  if (r.session_saved) verifyBrowserLogin();
+  else {
+    document.getElementById('browserStatus').textContent = 'No session yet';
+    document.getElementById('browserStatus').style.color = '#e3b341';
+  }
 }
 
 // Scheduled posts

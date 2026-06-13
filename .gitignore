@@ -7,3 +7,4 @@ images/
 downloaded_images/
 venv/
 .venv/
+browser_data/

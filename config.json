@@ -15,6 +15,7 @@
   "max_posts_per_day": 12,
   "cooldown_hours": 24,
   "ai_provider": "openai",
+  "posting_method": "browser",
   "trends_geo": "US",
   "schedule": {
     "start_hour": 8,
